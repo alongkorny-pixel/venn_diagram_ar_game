@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Venn Shade AR - เกมแรเงาแผนภาพเวนน์ด้วยนิ้วมือ</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts (Sarabun & Prompt) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <!-- MediaPipe Hands & Camera Utils for AR Tracking -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: 'Prompt', 'Sarabun', sans-serif;
+            background: radial-gradient(circle, #1a1c29 0%, #0c0d14 100%);
+            overflow-x: hidden;
+        }
+        /* ซ่อนวิดีโอตัวจับจริง แต่ใช้สำหรับ feed เข้า MediaPipe */
+        #webcam {
+            transform: scaleX(-1);
+            display: none;
+        }
+        /* เอฟเฟกต์นีออน */
+        .neon-border {
+            box-shadow: 0 0 15px rgba(147, 51, 234, 0.5), inset 0 0 15px rgba(147, 51, 234, 0.3);
+        }
+        .neon-text-blue {
+            text-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+        }
+        .neon-text-purple {
+            text-shadow: 0 0 10px rgba(168, 85, 247, 0.8);
+        }
+        /* แอนิเมชันตอนตอบถูก */
+        @keyframes pulse-correct {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.6)); }
+            50% { transform: scale(1.05); filter: drop-shadow(0 0 25px rgba(34, 197, 94, 1)); }
+        }
+        .animate-correct {
+            animation: pulse-correct 0.8s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen flex flex-col justify-between">
+
+    <!-- Header / แถบสถานะด้านบน -->
+    <header class="w-full bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-500/30">
+                    <i class="fa-solid fa-shapes text-2xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                        Venn Shade AR
+                    </h1>
+                    <p class="text-xs text-slate-400">ระบายสีแรเงาแผนภาพเวนน์ด้วยเทคโนโลยี AR</p>
+                </div>
+            </div>
+
+            <!-- คะแนนและข้อมูลผู้เล่น -->
+            <div class="flex items-center gap-6 text-sm">
+                <div class="bg-slate-800/80 border border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-2">
+                    <i class="fa-solid fa-trophy text-yellow-500"></i>
+                    <span>คะแนน: <strong id="score-display" class="text-yellow-400 text-lg">0</strong></span>
+                </div>
+                <div class="bg-slate-800/80 border border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-2">
+                    <i class="fa-solid fa-fire text-orange-500"></i>
+                    <span>คอมโบความเร็ว: <strong id="speed-bonus-display" class="text-orange-400 text-lg">x1.0</strong></span>
+                </div>
+                <div class="bg-slate-800/80 border border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group text-blue-500"></i>
+                    <span>ด่าน: <strong id="level-display" class="text-blue-400 text-lg">0/10</strong></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- พื้นที่แสดงผลเกมหลัก -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6 items-stretch justify-center">
+        
+        <!-- ฝั่งซ้าย: กล่องแสดงโจทย์ + แคนวาส AR แผนภาพเวนน์ -->
+        <div class="flex-1 bg-slate-950 rounded-2xl border border-slate-800 p-4 flex flex-col justify-between relative overflow-hidden min-h-[550px]">
+            
+            <!-- การ์ดภารกิจ / โจทย์คำถาม -->
+            <div class="w-full bg-slate-900/95 rounded-xl p-4 mb-4 border border-purple-500/20 neon-border flex flex-col sm:flex-row justify-between items-center gap-4 relative overflow-hidden">
+                <div class="absolute -top-10 -right-10 w-24 h-24 bg-purple-500/10 rounded-full blur-xl"></div>
+                <div class="text-center sm:text-left">
+                    <div class="text-[10px] font-semibold text-purple-400 tracking-wider uppercase">ภารกิจของด่านนี้</div>
+                    <h2 id="quest-text" class="text-3xl font-bold tracking-wide text-white">กรุณาผ่านหน้าเตรียมความพร้อม</h2>
+                </div>
+                
+                <!-- แสดงระดับความยาก -->
+                <div class="flex items-center gap-2">
+                    <span id="level-difficulty" class="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-xs px-2.5 py-1.5 rounded-md font-semibold">เตรียมความพร้อม</span>
+                    <span class="bg-slate-800 text-slate-300 text-xs px-2.5 py-1.5 rounded-md">คะแนนฐาน: -</span>
+                </div>
+            </div>
+
+            <!-- กล่อง Canvas แสดงผล AR แผนภาพหลัก และหน้าต่างเตรียมความพร้อม -->
+            <div class="w-full flex-grow min-h-[380px] flex items-center justify-center relative rounded-xl overflow-hidden bg-slate-900 border border-slate-800/80">
+                
+                <!-- หน้าจอทับซ้อนสำหรับ "เตรียมความพร้อม" ก่อนเริ่มข้อแรก -->
+                <div id="prep-screen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center">
+                    <div class="bg-purple-600/10 border border-purple-500/30 p-4 rounded-full mb-4 animate-pulse">
+                        <i class="fa-solid fa-hand-spankles text-4xl text-purple-400"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">หน้าจอเตรียมความพร้อม (AR Calibration)</h3>
+                    <p class="text-slate-300 text-sm max-w-md mb-6 leading-relaxed">
+                        เริ่มกล้อง AR แล้วทำการ <strong class="text-yellow-400">ชูนิ้วขึ้นมาทั้ง 2 ข้างรวมกันให้ครบ 10 นิ้ว</strong> ค้างไว้เพื่อเริ่มต้นเกมแรเงาเวนน์ข้อแรก!
+                    </p>
+
+                    <!-- ปุ่มสำหรับเริ่มต้นเปิดกล้องโดยตรงในหน้าเตรียมตัว -->
+                    <button id="prep-start-camera-btn" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-purple-500/20 transition duration-300 flex items-center gap-2 mb-6 text-sm">
+                        <i class="fa-solid fa-camera text-base"></i> เปิดกล้องเพื่อเริ่มจับพิกัด AR
+                    </button>
+
+                    <!-- หลอดแสดงสถานะความคืบหน้าในการนับนิ้วเริ่มเกม -->
+                    <div class="w-full max-w-xs bg-slate-900 border border-slate-800 p-4 rounded-xl mb-6">
+                        <div class="flex justify-between text-xs text-slate-400 mb-2">
+                            <span id="prep-finger-count">ตรวจจับได้: 0 / 10 นิ้ว</span>
+                            <span id="prep-percent-text">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
+                            <div id="prep-progress-bar" class="bg-gradient-to-r from-blue-500 to-purple-500 h-full w-0 transition-all duration-100"></div>
+                        </div>
+                    </div>
+
+                    <!-- ปุ่มลัดสำหรับข้ามกรณีที่ไม่มีกล้อง -->
+                    <button id="bypass-prep-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-2 rounded-lg border border-slate-700 transition">
+                        <i class="fa-solid fa-circle-right mr-1"></i> ข้ามโหมดกล้อง (เข้าเล่นด้วยเมาส์/ทัช)
+                    </button>
+                </div>
+
+                <!-- ป้ายแสดงสถานะการตรวจจับของ AR -->
+                <div class="absolute top-4 left-4 z-30 flex flex-col gap-2">
+                    <span id="ar-status" class="bg-red-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit">
+                        <span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
+                        <i class="fa-solid fa-video-slash"></i> ไม่พบกล้อง/AR ปิดอยู่ (ใช้เมาส์ลากแทนได้)
+                    </span>
+                    <span id="gesture-status" class="bg-slate-800/90 text-slate-300 text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg hidden items-center gap-2 w-fit">
+                        <i class="fa-solid fa-hand animate-pulse"></i> ชู 3 นิ้วเพื่อระบายสี
+                    </span>
+                </div>
+
+                <!-- ปุ่มเปิด/ปิดกล้อง AR -->
+                <button id="toggle-camera-btn" class="absolute top-4 right-4 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-xs px-4 py-2 rounded-xl transition duration-300 shadow-lg flex items-center gap-2 border border-slate-700">
+                    <i class="fa-solid fa-camera"></i> เปิดกล้องเล่นแบบ AR
+                </button>
+
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="ar-canvas" class="absolute inset-0 w-full h-full object-cover"></canvas>
+                
+                <!-- ตัวบ่งชี้ความเร็วของเวลาโบนัส (หลอดจับเวลา) -->
+                <div class="absolute bottom-4 left-4 right-4 bg-slate-950/85 border border-slate-800/80 p-3 rounded-xl z-10">
+                    <div class="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>โบนัสคะแนนความเร็ว (Speed Bonus)</span>
+                        <span id="time-bonus-percent">100%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div id="time-bonus-bar" class="bg-gradient-to-r from-orange-500 via-yellow-400 to-green-500 h-full w-full transition-all duration-100"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ฝั่งขวา: คำอธิบายวิธีการเล่น + ชิ้นส่วนที่เลือกได้ + แผงตรวจคำตอบ -->
+        <div class="w-full lg:w-[450px] bg-slate-900/50 backdrop-blur-md rounded-2xl border border-slate-800 p-6 flex flex-col justify-between gap-6">
+            
+            <!-- คำแนะนำการเล่นเวอร์ชันอัปเกรด (กติกา 3 นิ้ว, 1 นิ้ว และ 2 นิ้ว) -->
+            <div class="bg-slate-950/80 border border-purple-500/30 neon-border rounded-xl p-4 flex flex-col gap-3">
+                <div class="flex items-center gap-2 text-purple-400 font-semibold text-sm">
+                    <i class="fa-solid fa-hand-sparkles"></i>
+                    <span>ระบบควบคุมด้วยนิ้วมือ AR (ขยับมือเพื่อใช้งาน)</span>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 text-xs">
+                    <div class="bg-amber-500/10 border border-amber-500/30 p-2 rounded-lg flex flex-col items-center text-center gap-1">
+                        <i class="fa-solid fa-hand text-lg text-amber-400"></i>
+                        <span class="font-semibold text-amber-200 text-[10px]">ชู 3 นิ้ว</span>
+                        <p class="text-[9px] text-slate-400">ระบายสีแรเงา</p>
+                    </div>
+                    <div class="bg-rose-500/10 border border-rose-500/30 p-2 rounded-lg flex flex-col items-center text-center gap-1">
+                        <i class="fa-solid fa-hand-pointer text-lg text-rose-400"></i>
+                        <span class="font-semibold text-rose-200 text-[10px]">ชู 1 นิ้ว</span>
+                        <p class="text-[9px] text-slate-400">ใช้ยางลบลบ</p>
+                    </div>
+                    <div class="bg-green-500/10 border border-green-500/30 p-2 rounded-lg flex flex-col items-center text-center gap-1">
+                        <i class="fa-solid fa-hand-scissors text-lg text-green-400"></i>
+                        <span class="font-semibold text-green-200 text-[10px]">ชู 2 นิ้ว</span>
+                        <p class="text-[9px] text-slate-400">ยืนยันส่งตอบ</p>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-400 text-center leading-relaxed border-t border-slate-800/80 pt-2">
+                    <i class="fa-solid fa-keyboard mr-1 text-blue-400"></i>หรือคลิกปุ่มด้านล่างเพื่อเลือกแบบปกติได้ทันที
+                </div>
+            </div>
+
+            <!-- แผงสำหรับแรเงาชิ้นส่วนเวนน์ด้วยตนเอง (สำหรับคลิกแบบปกติ / สำรอง AR) -->
+            <div class="flex-grow flex flex-col justify-center gap-3">
+                <div class="text-xs font-semibold text-slate-500 uppercase tracking-widest text-center">แผงควบคุมพื้นที่แรเงา (Interactive Control)</div>
+                
+                <!-- ชิ้นส่วนของ Venn diagram ในรูปแบบปุ่มจำลองการแรเงา -->
+                <div id="venn-parts-control" class="grid grid-cols-2 gap-2 max-w-sm mx-auto w-full">
+                    <!-- ปุ่มชิ้นส่วนต่างๆ จะถูกเจนเนอเรทด้วย JS ตามจำนวนเซตในข้อนั้นๆ -->
+                </div>
+            </div>
+
+            <!-- แผงปุ่มสำหรับดำเนินเกม (ตอบ, ข้าม, เริ่มใหม่) -->
+            <div class="flex flex-col gap-3">
+                <button id="submit-btn" disabled class="w-full bg-slate-800 text-slate-500 font-bold py-4 rounded-xl cursor-not-allowed text-lg flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-lock"></i> ยังไม่เริ่มเกม
+                </button>
+                <div class="flex gap-2">
+                    <button id="skip-btn" disabled class="flex-1 bg-slate-800/50 text-slate-600 font-semibold py-3 rounded-xl cursor-not-allowed text-sm flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-angles-right"></i> ข้าม
+                    </button>
+                    <button id="reset-btn" disabled class="flex-1 bg-slate-800/50 text-slate-600 font-semibold py-3 rounded-xl cursor-not-allowed text-sm flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-arrow-rotate-left"></i> รีเซ็ตใหม่
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- หน้าต่างแจ้งเตือนสรุปผลเมื่อจบด่าน -->
+    <div id="result-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 text-center shadow-2xl relative overflow-hidden">
+            <div class="absolute -top-12 -left-12 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl"></div>
+            
+            <div id="modal-icon-container" class="mx-auto w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4 bg-yellow-500/10 text-yellow-400">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            
+            <h3 id="modal-title" class="text-2xl font-bold mb-2">ยินดีด้วย! คุณผ่านด่านทั้งหมด</h3>
+            <p id="modal-desc" class="text-slate-400 text-sm mb-6">คุณได้ทำคะแนนสูงสุดประวัติศาสตร์ของเวนน์ไดอะแกรมแรเงา</p>
+
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6 flex justify-around">
+                <div>
+                    <div class="text-xs text-slate-500">คะแนนสุทธิ</div>
+                    <div id="modal-final-score" class="text-2xl font-bold text-yellow-400">1,250</div>
+                </div>
+                <div class="border-l border-slate-800"></div>
+                <div>
+                    <div class="text-xs text-slate-500">ตอบถูกทั้งหมด</div>
+                    <div id="modal-correct-count" class="text-2xl font-bold text-green-400">10 ข้อ</div>
+                </div>
+            </div>
+
+            <button id="modal-action-btn" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-3 rounded-xl transition duration-200">
+                เริ่มเล่นใหม่อีกครั้ง
+            </button>
+        </div>
+    </div>
+
+    <!-- ส่วนล่างสุดลิขสิทธิ์ / คำอธิบายการใช้นิ้ว AR -->
+    <footer class="w-full bg-slate-950/80 border-t border-slate-900 py-3 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <span>Venn Shade AR &copy; 2026 - ยกระดับการเรียนรู้เซตผ่านเทคโนโลยีตรวจจับมือ</span>
+            <div class="flex gap-4">
+                <span><i class="fa-solid fa-hand text-amber-400 mr-1"></i> 3 นิ้ว = ระบายสีแรเงา</span>
+                <span><i class="fa-solid fa-hand-pointer text-rose-400 mr-1"></i> 1 นิ้ว = ลบการแรเงา</span>
+                <span><i class="fa-solid fa-hand-scissors text-green-400 mr-1"></i> 2 นิ้ว = ยืนยันส่งคำตอบ</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ส่วน logic เกมทั้งหมด -->
+    <script>
+        const QUESTION_POOL = {
+            easy: [
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B', correctParts: ['both_AB'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ A ∪ B', correctParts: ['only_A', 'both_AB', 'only_B'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของเซต A เท่านั้น', correctParts: ['only_A', 'both_AB'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของเซต B เท่านั้น', correctParts: ['only_B', 'both_AB'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ B - A', correctParts: ['only_B'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ A - B', correctParts: ['only_A'] }
+            ],
+            medium: [
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A′', correctParts: ['only_B', 'outside_2set'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ B′', correctParts: ['only_A', 'outside_2set'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B)′ (ภายนอกเซตทั้งหมด)', correctParts: ['outside_2set'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B)′', correctParts: ['only_A', 'only_B', 'outside_2set'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A′ ∩ B', correctParts: ['only_B'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B′', correctParts: ['only_A'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A′ ∪ B′', correctParts: ['only_A', 'only_B', 'outside_2set'] }
+            ],
+            challenging: [
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B ∩ C', correctParts: ['all_ABC'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∪ B ∪ C', correctParts: ['only_A', 'only_B', 'only_C', 'only_AB', 'only_BC', 'only_AC', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A - (B ∪ C)', correctParts: ['only_A'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ B - (A ∪ C)', correctParts: ['only_B'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ C - (A ∪ B)', correctParts: ['only_C'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B', correctParts: ['only_AB', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ B ∩ C', correctParts: ['only_BC', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∩ C', correctParts: ['only_AC', 'all_ABC'] }
+            ],
+            hard: [
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B) - C', correctParts: ['only_AB'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (B ∩ C) - A', correctParts: ['only_BC'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ C) - B', correctParts: ['only_AC'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B) ∩ C', correctParts: ['only_AC', 'only_BC', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B) ∪ C', correctParts: ['only_AB', 'all_ABC', 'only_C', 'only_AC', 'only_BC'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ A ∩ (B ∪ C)', correctParts: ['only_AB', 'only_AC', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A - B) ∩ C', correctParts: ['only_AC'] }
+            ],
+            master: [
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B ∪ C)′', correctParts: ['outside_3set'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ C) ∪ (B - C)', correctParts: ['only_AC', 'all_ABC', 'only_B', 'only_AB'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B)′ ∩ C', correctParts: ['only_C'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ A′ ∩ B′ ∩ C', correctParts: ['only_C'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B)′ ∩ C', correctParts: ['only_C', 'only_AC', 'only_BC'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B ∩ C)′', correctParts: ['outside_3set', 'only_A', 'only_B', 'only_C', 'only_AB', 'only_BC', 'only_AC'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B)′ ∪ C', correctParts: ['outside_3set', 'only_C', 'only_AC', 'only_BC', 'all_ABC'] }
+            ]
+        };
+
+        const VENN_PARTS_INFO = {
+            2: [
+                { id: 'only_A', label: 'A อย่างเดียว', color: 'rgba(59, 130, 246, 0.15)', activeColor: 'rgba(59, 130, 246, 0.8)' },
+                { id: 'both_AB', label: 'ส่วนที่ทับซ้อน A และ B', color: 'rgba(168, 85, 247, 0.15)', activeColor: 'rgba(168, 85, 247, 0.8)' },
+                { id: 'only_B', label: 'B อย่างเดียว', color: 'rgba(236, 72, 153, 0.15)', activeColor: 'rgba(236, 72, 153, 0.8)' },
+                { id: 'outside_2set', label: 'ภายนอก (U)', color: 'rgba(148, 163, 184, 0.05)', activeColor: 'rgba(148, 163, 184, 0.6)' }
+            ],
+            3: [
+                { id: 'only_A', label: 'A อย่างเดียว', color: 'rgba(59, 130, 246, 0.12)', activeColor: 'rgba(59, 130, 246, 0.8)' },
+                { id: 'only_B', label: 'B อย่างเดียว', color: 'rgba(236, 72, 153, 0.12)', activeColor: 'rgba(236, 72, 153, 0.8)' },
+                { id: 'only_C', label: 'C อย่างเดียว', color: 'rgba(34, 197, 94, 0.12)', activeColor: 'rgba(34, 197, 94, 0.8)' },
+                { id: 'only_AB', label: 'เฉพาะ A และ B', color: 'rgba(168, 85, 247, 0.12)', activeColor: 'rgba(168, 85, 247, 0.8)' },
+                { id: 'only_BC', label: 'เฉพาะ B และ C', color: 'rgba(217, 70, 239, 0.12)', activeColor: 'rgba(217, 70, 239, 0.8)' },
+                { id: 'only_AC', label: 'เฉพาะ A และ C', color: 'rgba(20, 184, 166, 0.12)', activeColor: 'rgba(20, 184, 166, 0.8)' },
+                { id: 'all_ABC', label: 'ใจกลางร่วมกัน A-B-C', color: 'rgba(245, 158, 11, 0.12)', activeColor: 'rgba(245, 158, 11, 0.8)' },
+                { id: 'outside_3set', label: 'ภายนอกทั้งหมด (U)', color: 'rgba(148, 163, 184, 0.05)', activeColor: 'rgba(148, 163, 184, 0.6)' }
+            ]
+        };
+
+        let GAME_LEVELS = [];
+        let currentLevelIndex = 0;
+        let score = 0;
+        let speedMultiplier = 1.0;
+        let selectedParts = new Set();
+        let questBonusTimer = null;
+        let bonusTimePercent = 100;
+        let correctAnswersCount = 0;
+        let isGameStarted = false; 
+        let prepProgress = 0; 
+
+        let vennLayout = {
+            centerX: 0,
+            centerY: 0,
+            radius: 0,
+            circles: {}
+        };
+
+        const offCanvas = document.createElement('canvas');
+        const offCtx = offCanvas.getContext('2d');
+
+        let isCameraActive = false;
+        let cameraInstance = null;
+        let handsDetector = null; // ยืนยันการประกาศตัวแปรส่วนกลาง (Global Variable) ที่ใช้ในการจัดเก็บ Hands Detector
+        let pointerPosition = { x: 0, y: 0 };
+        let currentGestureMode = 'none';
+        
+        let lastSubmitTime = 0;
+        const SUBMIT_COOLDOWN_MS = 3000; 
+
+        const canvas = document.getElementById('ar-canvas');
+        const ctx = canvas.getContext('2d');
+        const webcamElement = document.getElementById('webcam');
+        const scoreDisplay = document.getElementById('score-display');
+        const speedBonusDisplay = document.getElementById('speed-bonus-display');
+        const levelDisplay = document.getElementById('level-display');
+        const questText = document.getElementById('quest-text');
+        const levelDifficulty = document.getElementById('level-difficulty');
+        const vennPartsControl = document.getElementById('venn-parts-control');
+        const submitBtn = document.getElementById('submit-btn');
+        const skipBtn = document.getElementById('skip-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const timeBonusBar = document.getElementById('time-bonus-bar');
+        const timeBonusPercent = document.getElementById('time-bonus-percent');
+        const arStatus = document.getElementById('ar-status');
+        const gestureStatus = document.getElementById('gesture-status');
+        const toggleCameraBtn = document.getElementById('toggle-camera-btn');
+        const prepStartCameraBtn = document.getElementById('prep-start-camera-btn');
+        const resultModal = document.getElementById('result-modal');
+        const prepScreen = document.getElementById('prep-screen');
+        const prepFingerCount = document.getElementById('prep-finger-count');
+        const prepProgressBar = document.getElementById('prep-progress-bar');
+        const prepPercentText = document.getElementById('prep-percent-text');
+        const bypassPrepBtn = document.getElementById('bypass-prep-btn');
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function generateGameCampaign() {
+            const tiers = ['easy', 'medium', 'challenging', 'hard', 'master'];
+            const chosenLevels = [];
+            let currentId = 1;
+
+            tiers.forEach(tier => {
+                const shuffledTier = shuffleArray([...QUESTION_POOL[tier]]);
+                const selected = shuffledTier.slice(0, 2);
+                
+                selected.forEach(level => {
+                    chosenLevels.push({
+                        ...level,
+                        id: currentId++
+                    });
+                });
+            });
+
+            GAME_LEVELS = chosenLevels;
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            offCanvas.width = rect.width;
+            offCanvas.height = rect.height;
+            calculateVennLayout();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function calculateVennLayout() {
+            const w = canvas.width || 300;
+            const h = canvas.height || 300;
+            const safeHeight = Math.max(100, h - 75); 
+            const size = Math.max(100, Math.min(w, safeHeight)) * 0.75;
+            
+            const cx = w / 2;
+            const cy = safeHeight / 2 + 10;
+            const currentLevel = GAME_LEVELS[currentLevelIndex] || { setsCount: 2 };
+
+            vennLayout.centerX = cx;
+            vennLayout.centerY = cy;
+            vennLayout.radius = Math.max(10, size / 2.5);
+
+            const r = vennLayout.radius;
+
+            if (currentLevel.setsCount === 2) {
+                const offset = r * 0.55;
+                vennLayout.circles = {
+                    A: { x: cx - offset, y: cy, r: r, label: 'A', color: 'rgba(59, 130, 246, 0.15)', stroke: '#3b82f6' },
+                    B: { x: cx + offset, y: cy, r: r, label: 'B', color: 'rgba(236, 72, 153, 0.15)', stroke: '#ec4899' }
+                };
+            } else {
+                const offset = r * 0.5;
+                const heightOffset = r * 0.43;
+                vennLayout.circles = {
+                    A: { x: cx - offset, y: cy + heightOffset, r: r, label: 'A', color: 'rgba(59, 130, 246, 0.12)', stroke: '#3b82f6' },
+                    B: { x: cx + offset, y: cy + heightOffset, r: r, label: 'B', color: 'rgba(236, 72, 153, 0.12)', stroke: '#ec4899' },
+                    C: { x: cx, y: cy - heightOffset, r: r, label: 'C', color: 'rgba(34, 197, 94, 0.12)', stroke: '#22c55e' }
+                };
+            }
+        }
+
+        function startBonusTimer() {
+            if (questBonusTimer) clearInterval(questBonusTimer);
+            bonusTimePercent = 100;
+            speedMultiplier = 2.0;
+            
+            questBonusTimer = setInterval(() => {
+                bonusTimePercent -= 0.5;
+                if (bonusTimePercent <= 0) {
+                    bonusTimePercent = 0;
+                    speedMultiplier = 1.0;
+                    clearInterval(questBonusTimer);
+                } else {
+                    speedMultiplier = 1.0 + (bonusTimePercent / 100.0);
+                }
+                updateBonusUI();
+            }, 100);
+        }
+
+        function updateBonusUI() {
+            timeBonusBar.style.width = `${bonusTimePercent}%`;
+            timeBonusPercent.textContent = `x${speedMultiplier.toFixed(1)} Bonus`;
+            speedBonusDisplay.textContent = `x${speedMultiplier.toFixed(1)}`;
+
+            if (bonusTimePercent > 50) {
+                timeBonusBar.className = "bg-gradient-to-r from-green-400 to-green-500 h-full transition-all duration-100";
+            } else if (bonusTimePercent > 20) {
+                timeBonusBar.className = "bg-gradient-to-r from-yellow-400 to-yellow-500 h-full transition-all duration-100";
+            } else {
+                timeBonusBar.className = "bg-gradient-to-r from-red-500 to-red-600 h-full transition-all duration-100";
+            }
+        }
+
+        function drawVennDiagram() {
+            const currentLevel = GAME_LEVELS[currentLevelIndex] || { setsCount: 2 };
+            
+            const padding = 20;
+            const rectX = padding;
+            const rectY = padding;
+            const rectW = canvas.width - padding * 2;
+            const rectH = Math.max(100, canvas.height - padding * 2 - 60);
+
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(rectX, rectY, rectW, rectH);
+
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'bold 20px Prompt';
+            ctx.fillText('U', rectX + rectW - 25, rectY + 30);
+
+            if (isGameStarted) {
+                const parts = VENN_PARTS_INFO[currentLevel.setsCount];
+                parts.forEach(part => {
+                    if (selectedParts.has(part.id)) {
+                        fillVennPart(part.id, part.activeColor);
+                    }
+                });
+            }
+
+            Object.keys(vennLayout.circles).forEach(key => {
+                const circle = vennLayout.circles[key];
+                ctx.beginPath();
+                ctx.arc(circle.x, circle.y, Math.max(1, circle.r), 0, Math.PI * 2);
+                ctx.strokeStyle = circle.stroke;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = 'bold 24px Prompt';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                let labelX = circle.x;
+                let labelY = circle.y;
+                if (key === 'A') { labelX -= circle.r * 0.7; labelY -= circle.r * 0.7; }
+                else if (key === 'B') { labelX += circle.r * 0.7; labelY -= circle.r * 0.7; }
+                else if (key === 'C') { labelY += circle.r * 0.85; }
+
+                ctx.fillText(circle.label, labelX, labelY);
+            });
+        }
+
+        function fillCircle(circle, targetCtx = offCtx) {
+            targetCtx.beginPath();
+            targetCtx.arc(circle.x, circle.y, Math.max(1, circle.r), 0, Math.PI * 2);
+            targetCtx.fill();
+        }
+
+        function fillUniverse(targetCtx = offCtx) {
+            targetCtx.beginPath();
+            targetCtx.rect(20, 20, canvas.width - 40, Math.max(50, canvas.height - 40 - 60));
+            targetCtx.fill();
+        }
+
+        function fillVennPart(partId, fillColor) {
+            if (fillColor === 'transparent') return;
+
+            offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+            offCtx.fillStyle = fillColor;
+            offCtx.globalCompositeOperation = 'source-over';
+
+            const level = GAME_LEVELS[currentLevelIndex] || { setsCount: 2 };
+
+            if (level.setsCount === 2) {
+                const cA = vennLayout.circles.A;
+                const cB = vennLayout.circles.B;
+
+                if (partId === 'only_A') {
+                    fillCircle(cA);
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cB);
+                } 
+                else if (partId === 'only_B') {
+                    fillCircle(cB);
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cA);
+                } 
+                else if (partId === 'both_AB') {
+                    fillCircle(cA);
+                    offCtx.globalCompositeOperation = 'source-in';
+                    fillCircle(cB);
+                } 
+                else if (partId === 'outside_2set') {
+                    fillUniverse();
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cA);
+                    fillCircle(cB);
+                }
+            } 
+            else if (level.setsCount === 3) {
+                const cA = vennLayout.circles.A;
+                const cB = vennLayout.circles.B;
+                const cC = vennLayout.circles.C;
+
+                if (partId === 'only_A') {
+                    fillCircle(cA);
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cB);
+                    fillCircle(cC);
+                }
+                else if (partId === 'only_B') {
+                    fillCircle(cB);
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cA);
+                    fillCircle(cC);
+                }
+                else if (partId === 'only_C') {
+                    fillCircle(cC);
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cA);
+                    fillCircle(cB);
+                }
+                else if (partId === 'only_AB') {
+                    fillCircle(cA);
+                    offCtx.globalCompositeOperation = 'source-in';
+                    fillCircle(cB);
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cC);
+                }
+                else if (partId === 'only_BC') {
+                    fillCircle(cB);
+                    offCtx.globalCompositeOperation = 'source-in';
+                    fillCircle(cC);
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cA);
+                }
+                else if (partId === 'only_AC') {
+                    fillCircle(cA);
+                    offCtx.globalCompositeOperation = 'source-in';
+                    fillCircle(cC);
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cB);
+                }
+                else if (partId === 'all_ABC') {
+                    fillCircle(cA);
+                    offCtx.globalCompositeOperation = 'source-in';
+                    fillCircle(cB);
+                    offCtx.globalCompositeOperation = 'source-in';
+                    fillCircle(cC);
+                }
+                else if (partId === 'outside_3set') {
+                    fillUniverse();
+                    offCtx.globalCompositeOperation = 'destination-out';
+                    fillCircle(cA);
+                    fillCircle(cB);
+                    fillCircle(cC);
+                }
+            }
+
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.drawImage(offCanvas, 0, 0);
+            ctx.restore();
+        }
+
+        function getVennPartAtPoint(x, y) {
+            if (!isGameStarted) return null;
+            const level = GAME_LEVELS[currentLevelIndex];
+            const maxSafeHeight = Math.max(50, canvas.height - 20 - 60);
+            if (x < 20 || x > canvas.width - 20 || y < 20 || y > maxSafeHeight) {
+                return null;
+            }
+
+            const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+            
+            if (level.setsCount === 2) {
+                const cA = vennLayout.circles.A;
+                const cB = vennLayout.circles.B;
+
+                const inA = dist({x, y}, cA) <= cA.r;
+                const inB = dist({x, y}, cB) <= cB.r;
+
+                if (inA && inB) return 'both_AB';
+                if (inA && !inB) return 'only_A';
+                if (!inA && inB) return 'only_B';
+                return 'outside_2set';
+            } 
+            else if (level.setsCount === 3) {
+                const cA = vennLayout.circles.A;
+                const cB = vennLayout.circles.B;
+                const cC = vennLayout.circles.C;
+
+                const inA = dist({x, y}, cA) <= cA.r;
+                const inB = dist({x, y}, cB) <= cB.r;
+                const inC = dist({x, y}, cC) <= cC.r;
+
+                if (inA && inB && inC) return 'all_ABC';
+                if (inA && inB && !inC) return 'only_AB';
+                if (!inA && inB && inC) return 'only_BC';
+                if (inA && !inB && inC) return 'only_AC';
+                if (inA && !inB && !inC) return 'only_A';
+                if (!inA && inB && !inC) return 'only_B';
+                if (!inA && !inB && inC) return 'only_C';
+                return 'outside_3set';
+            }
+            return null;
+        }
+
+        function toggleVennPart(partId) {
+            if (!partId) return;
+            if (selectedParts.has(partId)) {
+                selectedParts.delete(partId);
+            } else {
+                selectedParts.add(partId);
+            }
+            updateUI();
+        }
+
+        function renderControlPanel() {
+            if (!isGameStarted) {
+                vennPartsControl.innerHTML = '<div class="text-slate-500 text-xs text-center py-6 w-full col-span-2"><i class="fa-solid fa-lock mr-1"></i> กรุณาเชื่อมกล้องและชู 10 นิ้วเพื่อเริ่มโจทย์และแผงควบคุม</div>';
+                return;
+            }
+            vennPartsControl.innerHTML = '';
+            const currentLevel = GAME_LEVELS[currentLevelIndex];
+            const parts = VENN_PARTS_INFO[currentLevel.setsCount];
+
+            parts.forEach(part => {
+                const isSelected = selectedParts.has(part.id);
+                const btn = document.createElement('button');
+                btn.className = `p-3 rounded-xl border text-sm font-semibold transition-all flex items-center justify-between ${
+                    isSelected 
+                    ? 'bg-purple-600/30 border-purple-500 text-white shadow-lg shadow-purple-500/10' 
+                    : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`;
+                btn.innerHTML = `
+                    <span>${part.label}</span>
+                    <i class="fa-solid ${isSelected ? 'fa-square-check text-purple-400' : 'fa-square text-slate-700'}"></i>
+                `;
+                btn.addEventListener('click', () => {
+                    toggleVennPart(part.id);
+                });
+                vennPartsControl.appendChild(btn);
+            });
+        }
+
+        function countFingers(landmarks) {
+            let count = 0;
+            if (landmarks[8].y < landmarks[6].y) count++;
+            if (landmarks[12].y < landmarks[10].y) count++;
+            if (landmarks[16].y < landmarks[14].y) count++;
+            if (landmarks[20].y < landmarks[18].y) count++;
+            if (landmarks[4].y < landmarks[3].y) count++;
+            return count;
+        }
+
+        function initMediaPipe() {
+            handsDetector = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+
+            handsDetector.setOptions({
+                maxNumHands: 2, 
+                modelComplexity: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.6
+            });
+
+            handsDetector.onResults(onHandTrackingResults);
+        }
+
+        function onHandTrackingResults(results) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (isCameraActive && results.image) {
+                ctx.save();
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            } else {
+                ctx.fillStyle = '#0c0d14';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            drawVennDiagram();
+
+            currentGestureMode = 'none';
+            let totalFingersDetected = 0;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                arStatus.className = "bg-green-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
+                arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span> <i class="fa-solid fa-video"></i> ตรวจพบระบบ AR`;
+
+                results.multiHandLandmarks.forEach(landmarks => {
+                    drawHandKeypoints(landmarks);
+                    totalFingersDetected += countFingers(landmarks);
+                });
+
+                if (!isGameStarted) {
+                    prepFingerCount.textContent = `ตรวจจับได้: ${totalFingersDetected} / 10 นิ้ว`;
+                    
+                    if (totalFingersDetected >= 9) {
+                        prepProgress = Math.min(100, prepProgress + 2); 
+                    } else {
+                        prepProgress = Math.max(0, prepProgress - 2.5); 
+                    }
+
+                    prepProgressBar.style.width = `${prepProgress}%`;
+                    prepPercentText.textContent = `${Math.floor(prepProgress)}%`;
+
+                    if (prepProgress >= 100) {
+                        startGame();
+                    }
+                    return; 
+                }
+
+                const primaryHand = results.multiHandLandmarks[0];
+                const indexFingerTip = primaryHand[8];
+                const middleFingerTip = primaryHand[12];
+                const ringFingerTip = primaryHand[16];
+                const pinkyTip = primaryHand[20];
+
+                const indexMCP = primaryHand[5];
+                const middleMCP = primaryHand[9];
+                const ringMCP = primaryHand[13];
+                const pinkyMCP = primaryHand[17];
+
+                const isIndexUp = indexFingerTip.y < indexMCP.y;
+                const isMiddleUp = middleFingerTip.y < middleMCP.y;
+                const isRingUp = ringFingerTip.y < ringMCP.y;
+                const isPinkyUp = pinkyTip.y < pinkyMCP.y;
+
+                const rawX = indexFingerTip.x;
+                const rawY = indexFingerTip.y;
+                pointerPosition.x = (1 - rawX) * canvas.width;
+                pointerPosition.y = rawY * canvas.height;
+
+                if (isIndexUp && isMiddleUp && isRingUp && !isPinkyUp) {
+                    currentGestureMode = 'select';
+                    gestureStatus.classList.remove('hidden');
+                    gestureStatus.className = "bg-amber-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
+                    gestureStatus.innerHTML = `<i class="fa-solid fa-hand text-yellow-300"></i> โหมด 3 นิ้ว: ระบายสีแรเงา`;
+                    
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 25, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#f59e0b';
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+
+                    ctx.fillStyle = 'rgba(245, 158, 11, 0.4)';
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 10, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    detectCollisionAndAction(pointerPosition.x, pointerPosition.y, 'select');
+                } 
+                else if (isIndexUp && !isMiddleUp && !isRingUp) {
+                    currentGestureMode = 'deselect';
+                    gestureStatus.classList.remove('hidden');
+                    gestureStatus.className = "bg-rose-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
+                    gestureStatus.innerHTML = `<i class="fa-solid fa-hand-pointer text-rose-300"></i> โหมด 1 นิ้ว: ยางลบ (ยกเลิกแรเงา)`;
+                    
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 25, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#f43f5e';
+                    ctx.lineWidth = 4;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.fillStyle = 'rgba(244, 63, 94, 0.4)';
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 10, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    detectCollisionAndAction(pointerPosition.x, pointerPosition.y, 'deselect');
+                } 
+                else if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp) {
+                    currentGestureMode = 'submit';
+                    gestureStatus.classList.remove('hidden');
+                    gestureStatus.className = "bg-green-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
+                    gestureStatus.innerHTML = `<i class="fa-solid fa-hand-scissors text-green-300 rotate-90"></i> โหมด 2 นิ้ว: ส่งคำตอบ...`;
+                    
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 25, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#10b981';
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+
+                    ctx.fillStyle = 'rgba(16, 185, 129, 0.4)';
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 10, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const now = Date.now();
+                    if (now - lastSubmitTime > SUBMIT_COOLDOWN_MS) {
+                        lastSubmitTime = now;
+                        checkAnswer();
+                    }
+                }
+                else {
+                    gestureStatus.classList.add('hidden');
+
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 12, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#3b82f6';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#3b82f6';
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            } else {
+                if (isCameraActive) {
+                    arStatus.className = "bg-amber-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
+                    arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span> ค้นหามือในกล้อง...`;
+                }
+                if (!isGameStarted && prepProgress > 0) {
+                    prepProgress = Math.max(0, prepProgress - 1);
+                    prepProgressBar.style.width = `${prepProgress}%`;
+                    prepPercentText.textContent = `${Math.floor(prepProgress)}%`;
+                }
+            }
+        }
+
+        function drawHandKeypoints(landmarks) {
+            ctx.fillStyle = '#a855f7';
+            ctx.strokeStyle = 'rgba(168, 85, 247, 0.5)';
+            ctx.lineWidth = 3;
+
+            const connections = [
+                [0, 1], [1, 2], [2, 3], [3, 4],
+                [0, 5], [5, 6], [6, 7], [7, 8],
+                [5, 9], [9, 10], [10, 11], [11, 12],
+                [9, 13], [13, 14], [14, 15], [15, 16],
+                [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]
+            ];
+
+            connections.forEach(([p1, p2]) => {
+                const pt1 = landmarks[p1];
+                const pt2 = landmarks[p2];
+                ctx.beginPath();
+                ctx.moveTo((1 - pt1.x) * canvas.width, pt1.y * canvas.height);
+                ctx.lineTo((1 - pt2.x) * canvas.width, pt2.y * canvas.height);
+                ctx.stroke();
+            });
+
+            landmarks.forEach(landmark => {
+                const cx = (1 - landmark.x) * canvas.width;
+                const cy = landmark.y * canvas.height;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function detectCollisionAndAction(x, y, action) {
+            const partId = getVennPartAtPoint(x, y);
+            if (!partId) return;
+
+            if (action === 'select') {
+                if (!selectedParts.has(partId)) {
+                    selectedParts.add(partId);
+                    updateUI();
+                    triggerSparkleEffect(x, y, 'rgba(168, 85, 247, 0.4)');
+                }
+            } else if (action === 'deselect') {
+                if (selectedParts.has(partId)) {
+                    selectedParts.delete(partId);
+                    updateUI();
+                    triggerSparkleEffect(x, y, 'rgba(244, 63, 94, 0.4)');
+                }
+            }
+        }
+
+        function triggerSparkleEffect(x, y, fillColor) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, 40, 0, Math.PI * 2);
+            ctx.fillStyle = fillColor;
+            ctx.fill();
+            ctx.restore();
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!isGameStarted) return;
+            if (isCameraActive && currentGestureMode !== 'none') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const clickX = (e.clientX - rect.left) * scaleX;
+            const clickY = (e.clientY - rect.top) * scaleY;
+
+            const clickedPartId = getVennPartAtPoint(clickX, clickY);
+            if (clickedPartId) {
+                toggleVennPart(clickedPartId);
+                triggerSparkleEffect(clickX, clickY, 'rgba(168, 85, 247, 0.25)');
+            }
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (!isGameStarted) return;
+            if (e.touches.length === 0) return;
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const touchX = (touch.clientX - rect.left) * scaleX;
+            const touchY = (touch.clientY - rect.top) * scaleY;
+
+            const touchedPartId = getVennPartAtPoint(touchX, touchY);
+            if (touchedPartId) {
+                toggleVennPart(touchedPartId);
+                triggerSparkleEffect(touchX, touchY, 'rgba(168, 85, 247, 0.25)');
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        function startGame() {
+            isGameStarted = true;
+            prepScreen.classList.add('hidden'); 
+            
+            submitBtn.disabled = false;
+            submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-lg flex items-center justify-center gap-2";
+            submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจคำตอบ (Submit Answer)`;
+
+            skipBtn.disabled = false;
+            skipBtn.className = "flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl transition text-sm flex items-center justify-center gap-1";
+            
+            resetBtn.disabled = false;
+            resetBtn.className = "flex-1 bg-slate-800 hover:bg-red-950/40 hover:text-red-400 text-slate-400 font-semibold py-3 rounded-xl transition text-sm flex items-center justify-center gap-1 border border-transparent hover:border-red-900/50";
+
+            loadLevel(0);
+        }
+
+        bypassPrepBtn.addEventListener('click', () => {
+            startGame();
+        });
+
+        function loadLevel(index) {
+            if (index >= GAME_LEVELS.length) {
+                showEndGameModal();
+                return;
+            }
+
+            currentLevelIndex = index;
+            selectedParts.clear();
+
+            const level = GAME_LEVELS[currentLevelIndex];
+
+            levelDisplay.textContent = `${level.id}/${GAME_LEVELS.length}`;
+            questText.textContent = level.questText;
+            levelDifficulty.textContent = level.difficulty;
+            levelDifficulty.className = level.difficultyClass;
+
+            calculateVennLayout();
+            renderControlPanel();
+            
+            if (isGameStarted) {
+                startBonusTimer();
+            }
+
+            if (!isCameraActive) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0c0d14';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                drawVennDiagram();
+            }
+        }
+
+        function updateUI() {
+            scoreDisplay.textContent = score;
+            renderControlPanel();
+
+            if (!isCameraActive) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0c0d14';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                drawVennDiagram();
+            }
+        }
+
+        function checkAnswer() {
+            if (!isGameStarted) return;
+            const level = GAME_LEVELS[currentLevelIndex];
+            const correctSet = new Set(level.correctParts);
+
+            const isCorrect = (selectedParts.size === correctSet.size) &&
+                [...selectedParts].every(part => correctSet.has(part));
+
+            if (isCorrect) {
+                const basePoints = level.setsCount === 2 ? 100 : 150;
+                const earnedPoints = Math.round(basePoints * speedMultiplier);
+                score += earnedPoints;
+                correctAnswersCount++;
+
+                canvas.classList.add('animate-correct');
+                submitBtn.className = "w-full bg-green-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-green-500/20 text-lg flex items-center justify-center gap-2";
+                submitBtn.innerHTML = `<i class="fa-solid fa-square-poll-vertical animate-bounce"></i> ถูกต้อง! ได้รับ +${earnedPoints} แต้ม`;
+
+                setTimeout(() => {
+                    canvas.classList.remove('animate-correct');
+                    submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-lg flex items-center justify-center gap-2";
+                    submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจคำตอบ (Submit Answer)`;
+                    
+                    loadLevel(currentLevelIndex + 1);
+                }, 1200);
+
+            } else {
+                score = Math.max(0, score - 15);
+                updateUI();
+
+                submitBtn.className = "w-full bg-red-600 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-red-500/20 text-lg flex items-center justify-center gap-2";
+                submitBtn.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> ยังไม่ถูก! ลองเช็คพื้นที่อีกครั้ง (-15 แต้ม)`;
+
+                setTimeout(() => {
+                    submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-lg flex items-center justify-center gap-2";
+                    submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจคำตอบ (Submit Answer)`;
+                }, 1500);
+            }
+        }
+
+        function skipLevel() {
+            if (!isGameStarted) return;
+            score = Math.max(0, score - 20);
+            loadLevel(currentLevelIndex + 1);
+        }
+
+        function resetGame() {
+            score = 0;
+            correctAnswersCount = 0;
+            isGameStarted = false;
+            prepProgress = 0;
+            
+            prepScreen.classList.remove('hidden'); 
+            prepFingerCount.textContent = `ตรวจจับได้: 0 / 10 นิ้ว`;
+            prepProgressBar.style.width = `0%`;
+            prepPercentText.textContent = `0%`;
+
+            prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเพื่อเริ่มจับพิกัด AR`;
+            prepStartCameraBtn.className = "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-purple-500/20 transition duration-300 flex items-center gap-2 mb-6 text-sm pointer-events-auto";
+
+            submitBtn.disabled = true;
+            submitBtn.className = "w-full bg-slate-800 text-slate-500 font-bold py-4 rounded-xl cursor-not-allowed text-lg flex items-center justify-center gap-2";
+            submitBtn.innerHTML = `<i class="fa-solid fa-lock"></i> ยังไม่เริ่มเกม`;
+
+            skipBtn.disabled = true;
+            skipBtn.className = "flex-1 bg-slate-800/50 text-slate-600 font-semibold py-3 rounded-xl cursor-not-allowed text-sm flex items-center justify-center gap-1";
+            
+            resetBtn.disabled = true;
+            resetBtn.className = "flex-1 bg-slate-800/50 text-slate-600 font-semibold py-3 rounded-xl cursor-not-allowed text-sm flex items-center justify-center gap-1";
+
+            generateGameCampaign();
+            loadLevel(0);
+        }
+
+        function showEndGameModal() {
+            if (questBonusTimer) clearInterval(questBonusTimer);
+            
+            resultModal.classList.remove('hidden');
+            document.getElementById('modal-final-score').textContent = score;
+            document.getElementById('modal-correct-count').textContent = `${correctAnswersCount} / 10 ข้อ`;
+
+            if (score > 1000) {
+                document.getElementById('modal-title').textContent = 'สุดยอดอัจฉริยะเซต!';
+                document.getElementById('modal-desc').textContent = 'คุณแรเงาแผนภาพเวนน์ได้อย่างสมบูรณ์แบบด้วยความเร็วเหนือแสง!';
+                document.getElementById('modal-icon-container').className = "mx-auto w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4 bg-yellow-500/15 text-yellow-400";
+            } else {
+                document.getElementById('modal-title').textContent = 'จบภารกิจแรเงาเซต!';
+                document.getElementById('modal-desc').textContent = 'ฝึกฝนบ่อยๆ จะช่วยพัฒนาทักษะคณิตศาสตร์ของคุณให้รวดเร็วยิ่งขึ้น';
+                document.getElementById('modal-icon-container').className = "mx-auto w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4 bg-blue-500/15 text-blue-400";
+            }
+        }
+
+        submitBtn.addEventListener('click', checkAnswer);
+        skipBtn.addEventListener('click', skipLevel);
+        resetBtn.addEventListener('click', resetGame);
+        
+        document.getElementById('modal-action-btn').addEventListener('click', () => {
+            resultModal.classList.add('hidden');
+            resetGame();
+        });
+
+        prepStartCameraBtn.addEventListener('click', () => {
+            toggleCameraBtn.click();
+        });
+
+        toggleCameraBtn.addEventListener('click', async () => {
+            if (!isCameraActive) {
+                try {
+                    toggleCameraBtn.textContent = 'กำลังโหลดโมเดล AR...';
+                    toggleCameraBtn.disabled = true;
+
+                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> กำลังเชื่อมต่อระบบกล้อง AR...`;
+                    prepStartCameraBtn.className = "bg-slate-800 text-slate-500 font-bold px-6 py-3.5 rounded-xl transition duration-300 flex items-center gap-2 mb-6 text-sm pointer-events-none";
+
+                    if (!handsDetector) {
+                        initMediaPipe();
+                    }
+
+                    handsDetector.setOptions({
+                        maxNumHands: 2, 
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.6,
+                        minTrackingConfidence: 0.6
+                    });
+
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 640, height: 480 } 
+                    });
+                    webcamElement.srcObject = stream;
+
+                    cameraInstance = new Camera(webcamElement, {
+                        onFrame: async () => {
+                            if (isCameraActive) {
+                                await handsDetector.send({ image: webcamElement });
+                            }
+                        },
+                        width: 640,
+                        height: 480
+                    });
+
+                    await cameraInstance.start();
+                    isCameraActive = true;
+                    toggleCameraBtn.disabled = false;
+                    toggleCameraBtn.innerHTML = `<i class="fa-solid fa-video"></i> ปิดกล้อง AR`;
+                    toggleCameraBtn.className = "absolute top-4 right-4 z-30 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition duration-300 shadow-lg flex items-center gap-2 border border-red-500";
+
+                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> กล้องพร้อมใช้งาน! กรุณาชู 10 นิ้ว`;
+                    prepStartCameraBtn.className = "bg-green-600/30 border border-green-500/50 text-green-300 font-bold px-6 py-3.5 rounded-xl flex items-center gap-2 mb-6 text-sm pointer-events-none";
+
+                } catch (err) {
+                    console.error("สิทธิ์กล้องถูกปฏิเสธ หรือพบข้อผิดพลาด:", err);
+                    toggleCameraBtn.disabled = false;
+                    toggleCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเล่นแบบ AR`;
+                    toggleCameraBtn.className = "absolute top-4 right-4 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-xs px-4 py-2 rounded-xl transition duration-300 shadow-lg flex items-center gap-2 border border-slate-700";
+
+                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> การเชื่อมต่อล้มเหลว (ลองเปิดสิทธิ์กล้อง)`;
+                    prepStartCameraBtn.className = "bg-red-950/80 border border-red-900/50 text-red-400 font-bold px-6 py-3.5 rounded-xl flex items-center gap-2 mb-6 text-sm pointer-events-auto";
+                }
+            } else {
+                isCameraActive = false;
+                if (cameraInstance) {
+                    await cameraInstance.stop();
+                }
+                const stream = webcamElement.srcObject;
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                webcamElement.srcObject = null;
+
+                toggleCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเล่นแบบ AR`;
+                toggleCameraBtn.className = "absolute top-4 right-4 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-xs px-4 py-2 rounded-xl transition duration-300 shadow-lg flex items-center gap-2 border border-slate-700";
+
+                prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเพื่อเริ่มจับพิกัด AR`;
+                prepStartCameraBtn.className = "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-purple-500/20 transition duration-300 flex items-center gap-2 mb-6 text-sm pointer-events-auto";
+
+                arStatus.className = "bg-red-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2";
+                arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white"></span> <i class="fa-solid fa-video-slash"></i> ไม่พบกล้อง/AR ปิดอยู่ (ใช้เมาส์ลากแทนได้)`;
+                gestureStatus.classList.add('hidden');
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0c0d14';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                drawVennDiagram();
+            }
+        });
+
+        window.onload = function() {
+            generateGameCampaign(); 
+            resizeCanvas();
+            loadLevel(0); 
+        };
+    </script>
+</body>
+</html>

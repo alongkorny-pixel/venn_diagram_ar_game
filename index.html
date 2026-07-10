@@ -367,7 +367,7 @@
 
         let isCameraActive = false;
         let cameraInstance = null;
-        let handsDetector = null; // ยืนยันการประกาศตัวแปรส่วนกลาง (Global Variable) ที่ใช้ในการจัดเก็บ Hands Detector
+        let handsDetector = null; // มั่นใจว่าได้กำหนดค่าโกลบอลเป็น null เริ่มต้นไว้เรียบร้อยแล้ว
         let pointerPosition = { x: 0, y: 0 };
         let currentGestureMode = 'none';
         
@@ -528,6 +528,7 @@
                 });
             }
 
+            // แสดงเส้นขอบวงกลมและตัวอักษรระบุชื่อเซตในตำแหน่งที่คมชัดที่สุดตามหัวข้อความสอดคล้องของโจทย์และสีสัน
             Object.keys(vennLayout.circles).forEach(key => {
                 const circle = vennLayout.circles[key];
                 ctx.beginPath();
@@ -536,18 +537,42 @@
                 ctx.lineWidth = 3;
                 ctx.stroke();
 
-                ctx.fillStyle = '#f8fafc';
-                ctx.font = 'bold 24px Prompt';
+                // ปรับแต่งสีและตำแหน่งตัวอักษรให้สอดคล้องกับเส้นขอบวงกลมเซตนั้นๆ ชัดเจน ไม่ทับซ้อนพื้นที่ตรงกลาง
+                ctx.fillStyle = circle.stroke; // สีตัวอักษรเดียวกับสีวงกลม
+                ctx.font = 'bold 26px Prompt';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
+                // ใส่เงาเรืองแสงสีขาวให้มองเห็นชัดเจนยิ่งขึ้นเวลาซ้อนทับภาพกล้องจริง
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
+                ctx.shadowBlur = 6;
+                
                 let labelX = circle.x;
                 let labelY = circle.y;
-                if (key === 'A') { labelX -= circle.r * 0.7; labelY -= circle.r * 0.7; }
-                else if (key === 'B') { labelX += circle.r * 0.7; labelY -= circle.r * 0.7; }
-                else if (key === 'C') { labelY += circle.r * 0.85; }
+                
+                const currentSetsCount = currentLevel.setsCount;
+                if (currentSetsCount === 2) {
+                    // จัดตำแหน่ง 2 เซต (จัดเฉียงบนซ้ายขวา)
+                    if (key === 'A') { labelX -= circle.r * 0.8; labelY -= circle.r * 0.8; }
+                    else if (key === 'B') { labelX += circle.r * 0.8; labelY -= circle.r * 0.8; }
+                } else {
+                    // จัดตำแหน่ง 3 เซต (สอดคล้องอย่างชัดเจน ไม่ให้ทับซ้อนส่วนแกนร่วม)
+                    if (key === 'A') { 
+                        labelX -= circle.r * 0.8; 
+                        labelY += circle.r * 0.5; // ดึงลงไปด้านล่างซ้ายนอกจุดตัด AB และ AC
+                    } else if (key === 'B') { 
+                        labelX += circle.r * 0.8; 
+                        labelY += circle.r * 0.5; // ดึงลงไปด้านล่างขวานอกจุดตัด AB และ BC
+                    } else if (key === 'C') { 
+                        labelY -= circle.r * 0.85; // ยกขึ้นเหนือด้านบนสุดของวง C พ้นจุดตัด AC, BC และ ABC
+                    }
+                }
 
-                ctx.fillText(circle.label, labelX, labelY);
+                ctx.fillText(key, labelX, labelY);
+                
+                // รีเซ็ตการตั้งค่าเงาหลังวาดตัวอักษรเสร็จเพื่อไม่ให้กระทบฟังก์ชันอื่น
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
             });
         }
 
@@ -1199,6 +1224,7 @@
                     prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> กำลังเชื่อมต่อระบบกล้อง AR...`;
                     prepStartCameraBtn.className = "bg-slate-800 text-slate-500 font-bold px-6 py-3.5 rounded-xl transition duration-300 flex items-center gap-2 mb-6 text-sm pointer-events-none";
 
+                    // รับประกันความพร้อมก่อนเรียกใช้งาน setOptions
                     if (!handsDetector) {
                         initMediaPipe();
                     }

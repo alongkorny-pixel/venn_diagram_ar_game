@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Venn Shade AR - เกมแรเงาแผนภาพเวนน์ด้วยนิ้วมือ</title>
     
     <!-- Tailwind CSS -->
@@ -23,209 +23,236 @@
     <style>
         body {
             font-family: 'Prompt', 'Sarabun', sans-serif;
-            background: radial-gradient(circle, #1a1c29 0%, #0c0d14 100%);
+            background: radial-gradient(circle at center, #11131e 0%, #06070a 100%);
             overflow-x: hidden;
+            overscroll-behavior-y: contain; 
         }
-        /* ซ่อนวิดีโอตัวจับจริง แต่ใช้สำหรับ feed เข้า MediaPipe */
         #webcam {
             transform: scaleX(-1);
             display: none;
         }
-        /* เอฟเฟกต์นีออน */
         .neon-border {
-            box-shadow: 0 0 15px rgba(147, 51, 234, 0.5), inset 0 0 15px rgba(147, 51, 234, 0.3);
+            box-shadow: 0 0 20px rgba(147, 51, 234, 0.4), inset 0 0 10px rgba(147, 51, 234, 0.2);
         }
-        .neon-text-blue {
-            text-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+        .neon-glow-btn {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+            transition: all 0.3s ease;
         }
-        .neon-text-purple {
-            text-shadow: 0 0 10px rgba(168, 85, 247, 0.8);
+        .neon-glow-btn:hover {
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.6);
         }
-        /* แอนิเมชันตอนตอบถูก */
         @keyframes pulse-correct {
-            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.6)); }
-            50% { transform: scale(1.05); filter: drop-shadow(0 0 25px rgba(34, 197, 94, 1)); }
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.5)); }
+            50% { transform: scale(1.03); filter: drop-shadow(0 0 25px rgba(34, 197, 94, 0.9)); }
         }
         .animate-correct {
-            animation: pulse-correct 0.8s ease-in-out infinite;
+            animation: pulse-correct 0.6s ease-in-out infinite;
+        }
+        .no-scroll {
+            touch-action: none;
+        }
+        /* ดนตรี/เอฟเฟกต์เปลวไฟสำหรับ Streak */
+        .streak-fire {
+            animation: flame 1s ease-in-out infinite alternate;
+        }
+        @keyframes flame {
+            0% { text-shadow: 0 0 4px #f97316, 0 0 10px #ea580c, 0 0 18px #ea580c; }
+            100% { text-shadow: 0 0 8px #f97316, 0 0 18px #f97316, 0 0 25px #ea580c; }
         }
     </style>
 </head>
-<body class="text-white min-h-screen flex flex-col justify-between">
+<body class="text-white min-h-screen flex flex-col justify-between select-none">
 
-    <!-- Header / แถบสถานะด้านบน -->
-    <header class="w-full bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+    <header class="w-full bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80 p-3 sm:p-4 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
             <div class="flex items-center gap-3">
-                <div class="bg-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-500/30">
-                    <i class="fa-solid fa-shapes text-2xl text-white"></i>
+                <div class="bg-gradient-to-tr from-blue-600 to-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-500/20">
+                    <i class="fa-solid fa-fire-flame-curved text-2xl text-white animate-pulse"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold tracking-wide bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                        Venn Shade AR
+                    <h1 class="text-xl font-bold tracking-wide bg-gradient-to-r from-blue-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
+                        Venn Shade AR 2.0
                     </h1>
-                    <p class="text-xs text-slate-400">ระบายสีแรเงาแผนภาพเวนน์ด้วยเทคโนโลยี AR</p>
+                    <p class="text-xs text-slate-400">ระบายสีเซตด้วยเทคโนโลยี AR และระเบิดพลังเสียงดนตรี!</p>
                 </div>
             </div>
 
-            <!-- คะแนนและข้อมูลผู้เล่น -->
-            <div class="flex items-center gap-6 text-sm">
-                <div class="bg-slate-800/80 border border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-2">
-                    <i class="fa-solid fa-trophy text-yellow-500"></i>
-                    <span>คะแนน: <strong id="score-display" class="text-yellow-400 text-lg">0</strong></span>
+            <!-- คะแนน รายละเอียด สตรีค แบบไฮเทค -->
+            <div class="flex items-center gap-3 text-xs sm:text-sm flex-wrap justify-center">
+                <div class="bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center gap-2">
+                    <i class="fa-solid fa-star text-yellow-500"></i>
+                    <span>คะแนน: <strong id="score-display" class="text-yellow-400 text-sm sm:text-lg">0</strong></span>
                 </div>
-                <div class="bg-slate-800/80 border border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-2">
-                    <i class="fa-solid fa-fire text-orange-500"></i>
-                    <span>คอมโบความเร็ว: <strong id="speed-bonus-display" class="text-orange-400 text-lg">x1.0</strong></span>
+                <div class="bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center gap-2">
+                    <span id="streak-flame" class="hidden text-orange-500 streak-fire font-bold text-sm">
+                        🔥 COMBO x<span id="streak-count">0</span>
+                    </span>
+                    <i class="fa-solid fa-gauge-high text-indigo-400"></i>
+                    <span>คูณความเร็ว: <strong id="speed-bonus-display" class="text-indigo-400 text-sm sm:text-lg">x1.0</strong></span>
                 </div>
-                <div class="bg-slate-800/80 border border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-2">
-                    <i class="fa-solid fa-layer-group text-blue-500"></i>
-                    <span>ด่าน: <strong id="level-display" class="text-blue-400 text-lg">0/10</strong></span>
+                <div class="bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center gap-2">
+                    <i class="fa-solid fa-gamepad text-blue-500"></i>
+                    <span>ด่าน: <strong id="level-display" class="text-blue-400 text-sm sm:text-lg">0/10</strong></span>
+                </div>
+                <!-- แสดงเวลาถอยหลังเฉพาะโหมดจับเวลา -->
+                <div id="timer-box" class="bg-red-950/40 border border-red-900/50 px-3 py-1.5 rounded-xl hidden items-center gap-2">
+                    <i class="fa-solid fa-stopwatch text-red-500 animate-spin"></i>
+                    <span>เวลาเหลือ: <strong id="time-left-display" class="text-red-400 text-sm sm:text-lg">60</strong> วินาที</span>
                 </div>
             </div>
         </div>
     </header>
 
-    <!-- พื้นที่แสดงผลเกมหลัก -->
-    <main class="flex-grow max-w-7xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6 items-stretch justify-center">
+    <main class="flex-grow max-w-7xl w-full mx-auto p-2 sm:p-4 flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch justify-center">
         
-        <!-- ฝั่งซ้าย: กล่องแสดงโจทย์ + แคนวาส AR แผนภาพเวนน์ -->
-        <div class="flex-1 bg-slate-950 rounded-2xl border border-slate-800 p-4 flex flex-col justify-between relative overflow-hidden min-h-[550px]">
+        <!-- ฝั่งซ้าย: พื้นที่จำลองแคนวาสและกล้อง AR -->
+        <div class="flex-1 bg-slate-950/80 rounded-2xl border border-slate-800 p-3 sm:p-4 flex flex-col justify-between relative overflow-hidden min-h-[480px] sm:min-h-[550px]">
             
-            <!-- การ์ดภารกิจ / โจทย์คำถาม -->
-            <div class="w-full bg-slate-900/95 rounded-xl p-4 mb-4 border border-purple-500/20 neon-border flex flex-col sm:flex-row justify-between items-center gap-4 relative overflow-hidden">
+            <!-- การ์ดจำลองโจทย์แรเงา -->
+            <div class="w-full bg-slate-900/90 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 border border-purple-500/20 neon-border flex flex-col sm:flex-row justify-between items-center gap-3 relative overflow-hidden">
                 <div class="absolute -top-10 -right-10 w-24 h-24 bg-purple-500/10 rounded-full blur-xl"></div>
                 <div class="text-center sm:text-left">
-                    <div class="text-[10px] font-semibold text-purple-400 tracking-wider uppercase">ภารกิจของด่านนี้</div>
-                    <h2 id="quest-text" class="text-3xl font-bold tracking-wide text-white">กรุณาผ่านหน้าเตรียมความพร้อม</h2>
+                    <div class="text-[10px] font-semibold text-purple-400 tracking-wider uppercase">กรุณาแรเงาเวนน์ตามเงื่อนไขเซต</div>
+                    <h2 id="quest-text" class="text-xl sm:text-2xl lg:text-3xl font-bold tracking-wide text-white">เลือกโหมดในหน้าจอเตรียมความพร้อม</h2>
                 </div>
                 
-                <!-- แสดงระดับความยาก -->
                 <div class="flex items-center gap-2">
-                    <span id="level-difficulty" class="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-xs px-2.5 py-1.5 rounded-md font-semibold">เตรียมความพร้อม</span>
-                    <span class="bg-slate-800 text-slate-300 text-xs px-2.5 py-1.5 rounded-md">คะแนนฐาน: -</span>
+                    <span id="level-difficulty" class="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-[10px] sm:text-xs px-2.5 py-1.5 rounded-md font-semibold">แนะแนวความพร้อม</span>
                 </div>
             </div>
 
-            <!-- กล่อง Canvas แสดงผล AR แผนภาพหลัก และหน้าต่างเตรียมความพร้อม -->
-            <div class="w-full flex-grow min-h-[380px] flex items-center justify-center relative rounded-xl overflow-hidden bg-slate-900 border border-slate-800/80">
+            <!-- หน้าจอ Canvas และ Calibration หน้าเมนูหลัก -->
+            <div class="w-full flex-grow min-h-[300px] sm:min-h-[380px] flex items-center justify-center relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80">
                 
-                <!-- หน้าจอทับซ้อนสำหรับ "เตรียมความพร้อม" ก่อนเริ่มข้อแรก -->
-                <div id="prep-screen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center">
-                    <div class="bg-purple-600/10 border border-purple-500/30 p-4 rounded-full mb-4 animate-pulse">
-                        <i class="fa-solid fa-hand-spankles text-4xl text-purple-400"></i>
+                <!-- หน้าต่างเตรียมความพร้อมและเลือกโหมดเล่นเกม -->
+                <div id="prep-screen" class="absolute inset-0 bg-slate-950/98 backdrop-blur-md z-20 flex flex-col items-center justify-center p-4 sm:p-6 text-center overflow-y-auto">
+                    <div class="bg-purple-600/10 border border-purple-500/30 p-3 rounded-full mb-3 animate-pulse">
+                        <i class="fa-solid fa-gamepad text-3xl sm:text-4xl text-purple-400"></i>
                     </div>
-                    <h3 class="text-2xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">หน้าจอเตรียมความพร้อม (AR Calibration)</h3>
-                    <p class="text-slate-300 text-sm max-w-md mb-6 leading-relaxed">
-                        เริ่มกล้อง AR แล้วทำการ <strong class="text-yellow-400">ชูนิ้วขึ้นมาทั้ง 2 ข้างรวมกันให้ครบ 10 นิ้ว</strong> ค้างไว้เพื่อเริ่มต้นเกมแรเงาเวนน์ข้อแรก!
+                    <h3 class="text-xl sm:text-2xl font-bold mb-1.5 bg-gradient-to-r from-blue-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">เลือกรูปแบบความสนุกที่คุณต้องการ</h3>
+                    <p class="text-slate-300 text-xs sm:text-sm max-w-md mb-4 sm:mb-6 leading-relaxed">
+                        เปิดกล้องหน้าเพื่อเล่นระบบตรวจจับนิ้ว **AR** ไฮเทค หรือสัมผัสหน้าจอโดยตรงเพื่อความรวดเร็วแม่นยำ พร้อมคลังข้อสอบและเสียงดนตรีเร้าอารมณ์!
                     </p>
 
-                    <!-- ปุ่มสำหรับเริ่มต้นเปิดกล้องโดยตรงในหน้าเตรียมตัว -->
-                    <button id="prep-start-camera-btn" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-purple-500/20 transition duration-300 flex items-center gap-2 mb-6 text-sm">
-                        <i class="fa-solid fa-camera text-base"></i> เปิดกล้องเพื่อเริ่มจับพิกัด AR
-                    </button>
-
-                    <!-- หลอดแสดงสถานะความคืบหน้าในการนับนิ้วเริ่มเกม -->
-                    <div class="w-full max-w-xs bg-slate-900 border border-slate-800 p-4 rounded-xl mb-6">
-                        <div class="flex justify-between text-xs text-slate-400 mb-2">
-                            <span id="prep-finger-count">ตรวจจับได้: 0 / 10 นิ้ว</span>
-                            <span id="prep-percent-text">0%</span>
-                        </div>
-                        <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
-                            <div id="prep-progress-bar" class="bg-gradient-to-r from-blue-500 to-purple-500 h-full w-0 transition-all duration-100"></div>
-                        </div>
+                    <!-- การเลือกโหมดการเล่น -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-xl mb-6">
+                        <button id="mode-campaign-btn" class="bg-gradient-to-br from-indigo-900/60 to-purple-900/60 hover:from-indigo-800 hover:to-purple-800 border border-indigo-500/40 p-4 rounded-xl text-center group transition">
+                            <i class="fa-solid fa-trophy text-2xl text-yellow-400 mb-1 group-hover:scale-110 transition"></i>
+                            <h4 class="font-bold text-sm text-white">ตะลุยด่านหลัก</h4>
+                            <p class="text-[10px] text-slate-400 mt-1">เผชิญด่านพิเศษ 10 ข้อ ความยากขยับขึ้นเรื่อยๆ</p>
+                        </button>
+                        <button id="mode-time-attack-btn" class="bg-gradient-to-br from-rose-950/60 to-red-900/60 hover:from-rose-900 hover:to-red-800 border border-rose-500/40 p-4 rounded-xl text-center group transition">
+                            <i class="fa-solid fa-stopwatch text-2xl text-rose-400 mb-1 group-hover:animate-spin"></i>
+                            <h4 class="font-bold text-sm text-white">จับเวลาความตาย</h4>
+                            <p class="text-[10px] text-slate-400 mt-1">เริ่มต้นที่ 60วิ ตอบถูกเพิ่มเวลา ท้าทายสติและคอมโบ</p>
+                        </button>
+                        <button id="mode-infinite-btn" class="bg-gradient-to-br from-teal-950/60 to-emerald-900/60 hover:from-teal-900 hover:to-emerald-800 border border-emerald-500/40 p-4 rounded-xl text-center group transition">
+                            <i class="fa-solid fa-infinity text-2xl text-emerald-400 mb-1 group-hover:scale-110 transition"></i>
+                            <h4 class="font-bold text-sm text-white">ฝึกสุ่มไร้ขีดจำกัด</h4>
+                            <p class="text-[10px] text-slate-400 mt-1">สุ่มโจทย์ไม่มีที่สิ้นสุด เพื่อการขัดเกลาทักษะคณิตศาสตร์</p>
+                        </button>
                     </div>
 
-                    <!-- ปุ่มลัดสำหรับข้ามกรณีที่ไม่มีกล้อง -->
-                    <button id="bypass-prep-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-2 rounded-lg border border-slate-700 transition">
-                        <i class="fa-solid fa-circle-right mr-1"></i> ข้ามโหมดกล้อง (เข้าเล่นด้วยเมาส์/ทัช)
-                    </button>
+                    <!-- แผงการเชื่อมต่อกล้อง AR เพื่อส่งค่า Calibration -->
+                    <div class="flex flex-col items-center gap-3 w-full max-w-sm bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
+                        <span class="text-xs text-purple-400 font-semibold"><i class="fa-solid fa-camera"></i> ระบบเปิดใช้งานกล้อง AR (Calibration)</span>
+                        <button id="prep-start-camera-btn" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-purple-500/10 transition flex items-center justify-center gap-2 text-xs sm:text-sm">
+                            <i class="fa-solid fa-camera"></i> ยืนยันเชื่อมกล้องเล่น AR
+                        </button>
+                        <div class="w-full">
+                            <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                                <span id="prep-finger-count">สตรีมกล้องเพื่อนับนิ้ว: 0 / 10 นิ้ว</span>
+                                <span id="prep-percent-text">0%</span>
+                            </div>
+                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                <div id="prep-progress-bar" class="bg-gradient-to-r from-blue-500 to-purple-500 h-full w-0 transition-all duration-100"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ป้ายแสดงสถานะการตรวจจับของ AR -->
-                <div class="absolute top-4 left-4 z-30 flex flex-col gap-2">
-                    <span id="ar-status" class="bg-red-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit">
-                        <span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
-                        <i class="fa-solid fa-video-slash"></i> ไม่พบกล้อง/AR ปิดอยู่ (ใช้เมาส์ลากแทนได้)
+                <div class="absolute top-3 left-3 z-30 flex flex-col gap-1.5">
+                    <span id="ar-status" class="bg-red-500/95 text-white text-[10px] sm:text-xs px-2.5 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-1.5 w-fit">
+                        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                        <i class="fa-solid fa-video-slash"></i> ใช้สัมผัสหน้าจอแรเงา (คลิกเลือกได้เลย)
                     </span>
-                    <span id="gesture-status" class="bg-slate-800/90 text-slate-300 text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg hidden items-center gap-2 w-fit">
+                    <span id="gesture-status" class="bg-slate-800/90 text-slate-300 text-[10px] sm:text-xs px-2.5 py-1.5 rounded-full font-semibold shadow-lg hidden items-center gap-1.5 w-fit">
                         <i class="fa-solid fa-hand animate-pulse"></i> ชู 3 นิ้วเพื่อระบายสี
                     </span>
                 </div>
 
-                <!-- ปุ่มเปิด/ปิดกล้อง AR -->
-                <button id="toggle-camera-btn" class="absolute top-4 right-4 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-xs px-4 py-2 rounded-xl transition duration-300 shadow-lg flex items-center gap-2 border border-slate-700">
-                    <i class="fa-solid fa-camera"></i> เปิดกล้องเล่นแบบ AR
+                <button id="toggle-camera-btn" class="absolute top-3 right-3 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-[10px] sm:text-xs px-3 py-1.5 rounded-xl transition duration-300 shadow-lg flex items-center gap-1.5 border border-slate-700">
+                    <i class="fa-solid fa-camera"></i> เปิดกล้องเล่น AR
                 </button>
 
-                <video id="webcam" autoplay playsinline></video>
-                <canvas id="ar-canvas" class="absolute inset-0 w-full h-full object-cover"></canvas>
+                <!-- วิดีโอเว็บแคมสำหรับสุ่มและแคนวาสหลัก -->
+                <video id="webcam" autoplay playsinline muted></video>
+                <canvas id="ar-canvas" class="absolute inset-0 w-full h-full object-cover no-scroll"></canvas>
                 
-                <!-- ตัวบ่งชี้ความเร็วของเวลาโบนัส (หลอดจับเวลา) -->
-                <div class="absolute bottom-4 left-4 right-4 bg-slate-950/85 border border-slate-800/80 p-3 rounded-xl z-10">
-                    <div class="flex justify-between text-xs text-slate-400 mb-1">
-                        <span>โบนัสคะแนนความเร็ว (Speed Bonus)</span>
+                <!-- ตัวบ่งชี้ความเร็วของเวลาโบนัส -->
+                <div class="absolute bottom-3 left-3 right-3 bg-slate-950/85 border border-slate-800/80 p-2 rounded-xl z-10">
+                    <div class="flex justify-between text-[10px] text-slate-400 mb-0.5">
+                        <span id="speed-bonus-title">โบนัสคะแนนความเร็ว (Speed Bonus)</span>
                         <span id="time-bonus-percent">100%</span>
                     </div>
-                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                         <div id="time-bonus-bar" class="bg-gradient-to-r from-orange-500 via-yellow-400 to-green-500 h-full w-full transition-all duration-100"></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- ฝั่งขวา: คำอธิบายวิธีการเล่น + ชิ้นส่วนที่เลือกได้ + แผงตรวจคำตอบ -->
-        <div class="w-full lg:w-[450px] bg-slate-900/50 backdrop-blur-md rounded-2xl border border-slate-800 p-6 flex flex-col justify-between gap-6">
+        <div class="w-full lg:w-[420px] bg-slate-900/50 backdrop-blur-md rounded-2xl border border-slate-800 p-4 sm:p-6 flex flex-col justify-between gap-4 sm:gap-6">
             
-            <!-- คำแนะนำการเล่นเวอร์ชันอัปเกรด (กติกา 3 นิ้ว, 1 นิ้ว และ 2 นิ้ว) -->
-            <div class="bg-slate-950/80 border border-purple-500/30 neon-border rounded-xl p-4 flex flex-col gap-3">
-                <div class="flex items-center gap-2 text-purple-400 font-semibold text-sm">
+            <!-- วิธีการควบคุมและวิธีการเล่น -->
+            <div class="bg-slate-950/80 border border-purple-500/30 neon-border rounded-xl p-3.5 flex flex-col gap-2.5">
+                <div class="flex items-center gap-1.5 text-purple-400 font-semibold text-xs sm:text-sm">
                     <i class="fa-solid fa-hand-sparkles"></i>
-                    <span>ระบบควบคุมด้วยนิ้วมือ AR (ขยับมือเพื่อใช้งาน)</span>
+                    <span>ระบบควบคุมตรวจจับนิ้วมือ (กล้อง AR)</span>
                 </div>
-                <div class="grid grid-cols-3 gap-1.5 text-xs">
-                    <div class="bg-amber-500/10 border border-amber-500/30 p-2 rounded-lg flex flex-col items-center text-center gap-1">
-                        <i class="fa-solid fa-hand text-lg text-amber-400"></i>
-                        <span class="font-semibold text-amber-200 text-[10px]">ชู 3 นิ้ว</span>
-                        <p class="text-[9px] text-slate-400">ระบายสีแรเงา</p>
+                <div class="grid grid-cols-3 gap-1 text-[10px] sm:text-xs">
+                    <div class="bg-amber-500/10 border border-amber-500/20 p-1.5 rounded-lg flex flex-col items-center text-center gap-0.5">
+                        <i class="fa-solid fa-hand text-base text-amber-400"></i>
+                        <span class="font-semibold text-amber-200">ชู 3 นิ้ว</span>
+                        <p class="text-[8px] text-slate-400">ลากค้างแรเงา</p>
                     </div>
-                    <div class="bg-rose-500/10 border border-rose-500/30 p-2 rounded-lg flex flex-col items-center text-center gap-1">
-                        <i class="fa-solid fa-hand-pointer text-lg text-rose-400"></i>
-                        <span class="font-semibold text-rose-200 text-[10px]">ชู 1 นิ้ว</span>
-                        <p class="text-[9px] text-slate-400">ใช้ยางลบลบ</p>
+                    <div class="bg-rose-500/10 border border-rose-500/20 p-1.5 rounded-lg flex flex-col items-center text-center gap-0.5">
+                        <i class="fa-solid fa-hand-pointer text-base text-rose-400"></i>
+                        <span class="font-semibold text-rose-200">ชู 1 นิ้ว</span>
+                        <p class="text-[8px] text-slate-400">ลากเพื่อลบ</p>
                     </div>
-                    <div class="bg-green-500/10 border border-green-500/30 p-2 rounded-lg flex flex-col items-center text-center gap-1">
-                        <i class="fa-solid fa-hand-scissors text-lg text-green-400"></i>
-                        <span class="font-semibold text-green-200 text-[10px]">ชู 2 นิ้ว</span>
-                        <p class="text-[9px] text-slate-400">ยืนยันส่งตอบ</p>
+                    <div class="bg-green-500/10 border border-green-500/20 p-1.5 rounded-lg flex flex-col items-center text-center gap-0.5">
+                        <i class="fa-solid fa-hand-scissors text-base text-green-400"></i>
+                        <span class="font-semibold text-green-200">ชู 2 นิ้ว</span>
+                        <p class="text-[8px] text-slate-400">ค้างส่งคำตอบ</p>
                     </div>
                 </div>
-                <div class="text-[11px] text-slate-400 text-center leading-relaxed border-t border-slate-800/80 pt-2">
-                    <i class="fa-solid fa-keyboard mr-1 text-blue-400"></i>หรือคลิกปุ่มด้านล่างเพื่อเลือกแบบปกติได้ทันที
+                <div class="text-[10px] sm:text-[11px] text-slate-400 text-center leading-relaxed border-t border-slate-800/80 pt-1.5 flex justify-center items-center gap-1">
+                    <i class="fa-solid fa-fingerprint text-blue-400 animate-pulse"></i>
+                    <span>แตะพื้นที่เวนน์บนแคนวาสโดยตรง เพื่อแรเงาได้ทันที</span>
                 </div>
             </div>
 
-            <!-- แผงสำหรับแรเงาชิ้นส่วนเวนน์ด้วยตนเอง (สำหรับคลิกแบบปกติ / สำรอง AR) -->
-            <div class="flex-grow flex flex-col justify-center gap-3">
-                <div class="text-xs font-semibold text-slate-500 uppercase tracking-widest text-center">แผงควบคุมพื้นที่แรเงา (Interactive Control)</div>
-                
-                <!-- ชิ้นส่วนของ Venn diagram ในรูปแบบปุ่มจำลองการแรเงา -->
-                <div id="venn-parts-control" class="grid grid-cols-2 gap-2 max-w-sm mx-auto w-full">
-                    <!-- ปุ่มชิ้นส่วนต่างๆ จะถูกเจนเนอเรทด้วย JS ตามจำนวนเซตในข้อนั้นๆ -->
+            <!-- แผงสำหรับแรเงาชิ้นส่วนด้วยปุ่มคีย์บอร์ดเสมือนหรือปุ่มจำลองการสัมผัส -->
+            <div class="flex-grow flex flex-col justify-center gap-2">
+                <div class="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-widest text-center">ปุ่มลัดระบายสีกดสัมผัส (Interactive Tap Panel)</div>
+                <div id="venn-parts-control" class="grid grid-cols-2 gap-1.5 sm:gap-2 max-w-sm mx-auto w-full">
+                    <!-- จะถูกจำลองขึ้นโดยฟังก์ชัน JS ด้านล่างตามเซตในปัจจุบัน -->
                 </div>
             </div>
 
-            <!-- แผงปุ่มสำหรับดำเนินเกม (ตอบ, ข้าม, เริ่มใหม่) -->
-            <div class="flex flex-col gap-3">
-                <button id="submit-btn" disabled class="w-full bg-slate-800 text-slate-500 font-bold py-4 rounded-xl cursor-not-allowed text-lg flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-lock"></i> ยังไม่เริ่มเกม
+            <!-- กล่องสรุปการทำงานส่งคำตอบ -->
+            <div class="flex flex-col gap-2.5">
+                <button id="submit-btn" disabled class="w-full bg-slate-800 text-slate-500 font-bold py-3.5 rounded-xl cursor-not-allowed text-base sm:text-lg flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-lock"></i> ยังไม่เลือกโหมดเกม
                 </button>
                 <div class="flex gap-2">
-                    <button id="skip-btn" disabled class="flex-1 bg-slate-800/50 text-slate-600 font-semibold py-3 rounded-xl cursor-not-allowed text-sm flex items-center justify-center gap-1">
-                        <i class="fa-solid fa-angles-right"></i> ข้าม
+                    <button id="skip-btn" disabled class="flex-1 bg-slate-800/50 text-slate-600 font-semibold py-2.5 rounded-xl cursor-not-allowed text-xs sm:text-sm flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-angles-right"></i> ข้ามโจทย์
                     </button>
-                    <button id="reset-btn" disabled class="flex-1 bg-slate-800/50 text-slate-600 font-semibold py-3 rounded-xl cursor-not-allowed text-sm flex items-center justify-center gap-1">
-                        <i class="fa-solid fa-arrow-rotate-left"></i> รีเซ็ตใหม่
+                    <button id="reset-btn" class="flex-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-house-user"></i> กลับหน้าเมนู
                     </button>
                 </div>
             </div>
@@ -233,77 +260,92 @@
         </div>
     </main>
 
-    <!-- หน้าต่างแจ้งเตือนสรุปผลเมื่อจบด่าน -->
-    <div id="result-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 text-center shadow-2xl relative overflow-hidden">
+    <!-- โมดอลเตือนเมื่อจบรอบการเล่นหรือจบด่านสูงสุด -->
+    <div id="result-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-5 sm:p-6 text-center shadow-2xl relative overflow-hidden">
             <div class="absolute -top-12 -left-12 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl"></div>
             
-            <div id="modal-icon-container" class="mx-auto w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4 bg-yellow-500/10 text-yellow-400">
+            <div id="modal-icon-container" class="mx-auto w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-3xl sm:text-4xl mb-4 bg-yellow-500/10 text-yellow-400">
                 <i class="fa-solid fa-trophy"></i>
             </div>
             
-            <h3 id="modal-title" class="text-2xl font-bold mb-2">ยินดีด้วย! คุณผ่านด่านทั้งหมด</h3>
-            <p id="modal-desc" class="text-slate-400 text-sm mb-6">คุณได้ทำคะแนนสูงสุดประวัติศาสตร์ของเวนน์ไดอะแกรมแรเงา</p>
+            <h3 id="modal-title" class="text-xl sm:text-2xl font-bold mb-1.5">สุดยอดความสำเร็จ!</h3>
+            <p id="modal-desc" class="text-slate-400 text-xs sm:text-sm mb-5 leading-relaxed">คุณทำทักษะสถิติได้สมบูรณ์ยอดเยี่ยม</p>
 
-            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6 flex justify-around">
+            <div class="bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800 mb-5 flex justify-around">
                 <div>
-                    <div class="text-xs text-slate-500">คะแนนสุทธิ</div>
-                    <div id="modal-final-score" class="text-2xl font-bold text-yellow-400">1,250</div>
+                    <div class="text-[10px] sm:text-xs text-slate-500">คะแนนสะสม</div>
+                    <div id="modal-final-score" class="text-xl sm:text-2xl font-bold text-yellow-400">0</div>
                 </div>
                 <div class="border-l border-slate-800"></div>
                 <div>
-                    <div class="text-xs text-slate-500">ตอบถูกทั้งหมด</div>
-                    <div id="modal-correct-count" class="text-2xl font-bold text-green-400">10 ข้อ</div>
+                    <div class="text-[10px] sm:text-xs text-slate-500">ตอบถูกรวมทั้งสิ้น</div>
+                    <div id="modal-correct-count" class="text-xl sm:text-2xl font-bold text-green-400">0 ข้อ</div>
+                </div>
+                <div class="border-l border-slate-800"></div>
+                <div>
+                    <div class="text-[10px] sm:text-xs text-slate-500">คอมโบสูงสุด</div>
+                    <div id="modal-max-combo" class="text-xl sm:text-2xl font-bold text-orange-400">0</div>
                 </div>
             </div>
 
-            <button id="modal-action-btn" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-3 rounded-xl transition duration-200">
-                เริ่มเล่นใหม่อีกครั้ง
+            <button id="modal-action-btn" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-3 rounded-xl transition duration-200 text-sm sm:text-base shadow-lg shadow-purple-500/15">
+                เลือกเล่นโหมดอื่นๆ / เล่นใหม่อีกครั้ง
             </button>
         </div>
     </div>
 
-    <!-- ส่วนล่างสุดลิขสิทธิ์ / คำอธิบายการใช้นิ้ว AR -->
-    <footer class="w-full bg-slate-950/80 border-t border-slate-900 py-3 text-center text-xs text-slate-500">
+    <!-- ส่วนท้ายหน้าเว็บ -->
+    <footer class="w-full bg-slate-950/80 border-t border-slate-900/90 py-3 text-center text-[10px] sm:text-xs text-slate-500">
         <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
-            <span>Venn Shade AR &copy; 2026 - ยกระดับการเรียนรู้เซตผ่านเทคโนโลยีตรวจจับมือ</span>
-            <div class="flex gap-4">
-                <span><i class="fa-solid fa-hand text-amber-400 mr-1"></i> 3 นิ้ว = ระบายสีแรเงา</span>
-                <span><i class="fa-solid fa-hand-pointer text-rose-400 mr-1"></i> 1 นิ้ว = ลบการแรเงา</span>
-                <span><i class="fa-solid fa-hand-scissors text-green-400 mr-1"></i> 2 นิ้ว = ยืนยันส่งคำตอบ</span>
+            <span>Venn Shade AR 2.0 &copy; 2026 - นวัตกรรมสื่อการเรียนรู้สมจริงผสานเสียงดนตรีสังเคราะห์</span>
+            <div class="hidden sm:flex gap-4">
+                <span><i class="fa-solid fa-hand text-amber-400 mr-1"></i> 3 นิ้ว = ลากระบายสี</span>
+                <span><i class="fa-solid fa-hand-pointer text-rose-400 mr-1"></i> 1 นิ้ว = ยางลบ</span>
+                <span><i class="fa-solid fa-hand-scissors text-green-400 mr-1"></i> 2 นิ้ว = ยืนยันตอบ</span>
             </div>
         </div>
     </footer>
 
-    <!-- ส่วน logic เกมทั้งหมด -->
     <script>
-        const QUESTION_POOL = {
+        // คลังข้อสอบโจทย์เซตแรเงาขนาดยักษ์ ครอบคลุมคณิตศาสตร์อย่างถูกต้องตามสัญกรณ์สากล 50+ โจทย์
+        const EXPANDED_QUESTION_POOL = {
             easy: [
                 { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B', correctParts: ['both_AB'] },
                 { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ A ∪ B', correctParts: ['only_A', 'both_AB', 'only_B'] },
-                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของเซต A เท่านั้น', correctParts: ['only_A', 'both_AB'] },
-                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของเซต B เท่านั้น', correctParts: ['only_B', 'both_AB'] },
-                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ B - A', correctParts: ['only_B'] },
-                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ A - B', correctParts: ['only_A'] }
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของเซต A (ทั้งหมด)', correctParts: ['only_A', 'both_AB'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของเซต B (ทั้งหมด)', correctParts: ['only_B', 'both_AB'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ B - A (เฉพาะ B)', correctParts: ['only_B'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ A - B (เฉพาะ A)', correctParts: ['only_A'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ภายนอก (A ∪ B)′', correctParts: ['outside_2set'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของเอกภพสัมพัทธ์ (U) ทั้งหมด', correctParts: ['only_A', 'both_AB', 'only_B', 'outside_2set'] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ว่างเปล่า (เซตว่าง Ø)', correctParts: [] },
+                { setsCount: 2, difficulty: 'ง่าย (2 เซต)', difficultyClass: 'bg-green-500/20 text-green-400 border border-green-500/30', questText: 'แรเงาพื้นที่ของ B′ ∩ B', correctParts: [] }
             ],
             medium: [
                 { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A′', correctParts: ['only_B', 'outside_2set'] },
                 { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ B′', correctParts: ['only_A', 'outside_2set'] },
-                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B)′ (ภายนอกเซตทั้งหมด)', correctParts: ['outside_2set'] },
                 { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B)′', correctParts: ['only_A', 'only_B', 'outside_2set'] },
                 { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A′ ∩ B', correctParts: ['only_B'] },
                 { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B′', correctParts: ['only_A'] },
-                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A′ ∪ B′', correctParts: ['only_A', 'only_B', 'outside_2set'] }
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A′ ∪ B′', correctParts: ['only_A', 'only_B', 'outside_2set'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A ⊕ B (ผลต่างสมมาตร)', correctParts: ['only_A', 'only_B'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ (A - B)′', correctParts: ['both_AB', 'only_B', 'outside_2set'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ (B - A)′', correctParts: ['only_A', 'both_AB', 'outside_2set'] },
+                { setsCount: 2, difficulty: 'ปานกลาง (2 เซต)', difficultyClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30', questText: 'แรเงาพื้นที่ของ A ∪ A′', correctParts: ['only_A', 'both_AB', 'only_B', 'outside_2set'] }
             ],
             challenging: [
                 { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B ∩ C', correctParts: ['all_ABC'] },
                 { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∪ B ∪ C', correctParts: ['only_A', 'only_B', 'only_C', 'only_AB', 'only_BC', 'only_AC', 'all_ABC'] },
-                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A - (B ∪ C)', correctParts: ['only_A'] },
-                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ B - (A ∪ C)', correctParts: ['only_B'] },
-                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ C - (A ∪ B)', correctParts: ['only_C'] },
-                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B', correctParts: ['only_AB', 'all_ABC'] },
-                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ B ∩ C', correctParts: ['only_BC', 'all_ABC'] },
-                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∩ C', correctParts: ['only_AC', 'all_ABC'] }
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A - (B ∪ C) (เฉพาะ A)', correctParts: ['only_A'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ B - (A ∪ C) (เฉพาะ B)', correctParts: ['only_B'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ C - (A ∪ B) (เฉพาะ C)', correctParts: ['only_C'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B (ทั้งหมด)', correctParts: ['only_AB', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ B ∩ C (ทั้งหมด)', correctParts: ['only_BC', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∩ C (ทั้งหมด)', correctParts: ['only_AC', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∪ B (ยกเว้นเซต C)', correctParts: ['only_A', 'only_AB', 'only_B'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ B ∪ C (ยกเว้นเซต A)', correctParts: ['only_B', 'only_BC', 'only_C'] },
+                { setsCount: 3, difficulty: 'ท้าทาย (3 เซต)', difficultyClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', questText: 'แรเงาพื้นที่ของ A ∪ C (ยกเว้นเซต B)', correctParts: ['only_A', 'only_AC', 'only_C'] }
             ],
             hard: [
                 { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B) - C', correctParts: ['only_AB'] },
@@ -312,23 +354,161 @@
                 { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B) ∩ C', correctParts: ['only_AC', 'only_BC', 'all_ABC'] },
                 { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B) ∪ C', correctParts: ['only_AB', 'all_ABC', 'only_C', 'only_AC', 'only_BC'] },
                 { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ A ∩ (B ∪ C)', correctParts: ['only_AB', 'only_AC', 'all_ABC'] },
-                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A - B) ∩ C', correctParts: ['only_AC'] }
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (A - B) ∩ C', correctParts: ['only_AC'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (B - C) ∩ A', correctParts: ['only_AB'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ (C - A) ∩ B', correctParts: ['only_BC'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ A′ ∩ B′ ∩ C', correctParts: ['only_C'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ A′ ∩ B ∩ C′', correctParts: ['only_B'] },
+                { setsCount: 3, difficulty: 'ยาก (3 เซต)', difficultyClass: 'bg-red-500/20 text-red-400 border border-red-500/30', questText: 'แรเงาพื้นที่ของ A ∩ B′ ∩ C′', correctParts: ['only_A'] }
             ],
             master: [
                 { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B ∪ C)′', correctParts: ['outside_3set'] },
                 { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ C) ∪ (B - C)', correctParts: ['only_AC', 'all_ABC', 'only_B', 'only_AB'] },
                 { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B)′ ∩ C', correctParts: ['only_C'] },
-                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ A′ ∩ B′ ∩ C', correctParts: ['only_C'] },
                 { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B)′ ∩ C', correctParts: ['only_C', 'only_AC', 'only_BC'] },
                 { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∩ B ∩ C)′', correctParts: ['outside_3set', 'only_A', 'only_B', 'only_C', 'only_AB', 'only_BC', 'only_AC'] },
-                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B)′ ∪ C', correctParts: ['outside_3set', 'only_C', 'only_AC', 'only_BC', 'all_ABC'] }
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ∪ B)′ ∪ C', correctParts: ['outside_3set', 'only_C', 'only_AC', 'only_BC', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ⊕ B) - C', correctParts: ['only_A', 'only_B'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A ⊕ B) ⊕ C', correctParts: ['only_A', 'only_B', 'only_C', 'all_ABC'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A′ ∪ B′ ∪ C′)′ (ใจกลางทั้งหมด)', correctParts: ['all_ABC'] },
+                { setsCount: 3, difficulty: 'ปรมาจารย์ (3 เซต)', difficultyClass: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', questText: 'แรเงาพื้นที่ของ (A - B) ∪ (B - C) ∪ (C - A)', correctParts: ['only_A', 'only_B', 'only_C', 'only_AB', 'only_BC', 'only_AC'] }
             ]
         };
 
-        const VENN_PARTS_INFO = {
+        // ระบบสังเคราะห์เสียง Web Audio API ปราศจากลิงก์เสียงภายนอกที่อาจพังได้
+        let audioCtx = null;
+        function playSFX(type) {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'click') {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, now);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } 
+                else if (type === 'correct') {
+                    // ทำนองเมเจอร์ Arpeggio ขึ้นเสียงสวรรค์
+                    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                    notes.forEach((freq, idx) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+                        gain.gain.setValueAtTime(0.12, now + idx * 0.08);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.25);
+                        osc.start(now + idx * 0.08);
+                        osc.stop(now + idx * 0.08 + 0.3);
+                    });
+                } 
+                else if (type === 'wrong') {
+                    // เสียง Buzzer ผิดหวังความถี่ต่ำลาดลง
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(160, now);
+                    osc.frequency.linearRampToValueAtTime(80, now + 0.35);
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } 
+                else if (type === 'combo') {
+                    // คอร์ดเสียงคอมโบสะดุดตา
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(880, now);
+                    osc.frequency.exponentialRampToValueAtTime(1320, now + 0.15);
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+                    osc.start(now);
+                    osc.stop(now + 0.18);
+                }
+                else if (type === 'levelUp') {
+                    // เสียงยินดีต้อนรับ/อัพเลเวล
+                    const chord = [329.63, 392.00, 523.25, 659.25]; // E4, G4, C5, E5
+                    chord.forEach(freq => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now);
+                        gain.gain.setValueAtTime(0.08, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                        osc.start(now);
+                        osc.stop(now + 0.8);
+                    });
+                }
+            } catch (err) {
+                console.log('Audio Context initialization waiting for interaction.');
+            }
+        }
+
+        // ระบบฟิสิกส์ระเบิดกระดาษสีเฉลิมฉลองเมื่อตอบถูกบนแคนวาส
+        let particles = [];
+        function triggerConfettiBurst(x, y) {
+            for (let i = 0; i < 60; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.5) * 12 - 4,
+                    size: Math.random() * 6 + 4,
+                    color: `hsl(${Math.random() * 360}, 90%, 60%)`,
+                    alpha: 1,
+                    decay: Math.random() * 0.02 + 0.015,
+                    gravity: 0.18
+                });
+            }
+        }
+
+        function updateAndDrawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += p.gravity;
+                p.alpha -= p.decay;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // โครงสร้างตัวแปรของระบบเกมและโหมดสเตตัสต่างๆ
+        const VENN_PARTS_INFO = VENN_PARTS_INFO_2SET = {
             2: [
                 { id: 'only_A', label: 'A อย่างเดียว', color: 'rgba(59, 130, 246, 0.15)', activeColor: 'rgba(59, 130, 246, 0.8)' },
-                { id: 'both_AB', label: 'ส่วนที่ทับซ้อน A และ B', color: 'rgba(168, 85, 247, 0.15)', activeColor: 'rgba(168, 85, 247, 0.8)' },
+                { id: 'both_AB', label: 'ส่วนร่วม A ∩ B', color: 'rgba(168, 85, 247, 0.15)', activeColor: 'rgba(168, 85, 247, 0.8)' },
                 { id: 'only_B', label: 'B อย่างเดียว', color: 'rgba(236, 72, 153, 0.15)', activeColor: 'rgba(236, 72, 153, 0.8)' },
                 { id: 'outside_2set', label: 'ภายนอก (U)', color: 'rgba(148, 163, 184, 0.05)', activeColor: 'rgba(148, 163, 184, 0.6)' }
             ],
@@ -339,7 +519,7 @@
                 { id: 'only_AB', label: 'เฉพาะ A และ B', color: 'rgba(168, 85, 247, 0.12)', activeColor: 'rgba(168, 85, 247, 0.8)' },
                 { id: 'only_BC', label: 'เฉพาะ B และ C', color: 'rgba(217, 70, 239, 0.12)', activeColor: 'rgba(217, 70, 239, 0.8)' },
                 { id: 'only_AC', label: 'เฉพาะ A และ C', color: 'rgba(20, 184, 166, 0.12)', activeColor: 'rgba(20, 184, 166, 0.8)' },
-                { id: 'all_ABC', label: 'ใจกลางร่วมกัน A-B-C', color: 'rgba(245, 158, 11, 0.12)', activeColor: 'rgba(245, 158, 11, 0.8)' },
+                { id: 'all_ABC', label: 'ใจกลางร่วม A-B-C', color: 'rgba(245, 158, 11, 0.12)', activeColor: 'rgba(245, 158, 11, 0.8)' },
                 { id: 'outside_3set', label: 'ภายนอกทั้งหมด (U)', color: 'rgba(148, 163, 184, 0.05)', activeColor: 'rgba(148, 163, 184, 0.6)' }
             ]
         };
@@ -355,6 +535,13 @@
         let isGameStarted = false; 
         let prepProgress = 0; 
 
+        // ระบบโหมดการเล่นที่ขยายเพิ่ม
+        let currentGameMode = 'campaign'; // campaign | time_attack | infinite
+        let timeAttackSeconds = 60;
+        let timeAttackTimer = null;
+        let comboStreak = 0;
+        let maxComboStreak = 0;
+
         let vennLayout = {
             centerX: 0,
             centerY: 0,
@@ -367,12 +554,12 @@
 
         let isCameraActive = false;
         let cameraInstance = null;
-        let handsDetector = null; // มั่นใจว่าได้กำหนดค่าโกลบอลเป็น null เริ่มต้นไว้เรียบร้อยแล้ว
+        let handsDetector = null; 
         let pointerPosition = { x: 0, y: 0 };
         let currentGestureMode = 'none';
         
         let lastSubmitTime = 0;
-        const SUBMIT_COOLDOWN_MS = 3000; 
+        const SUBMIT_COOLDOWN_MS = 2500; 
 
         const canvas = document.getElementById('ar-canvas');
         const ctx = canvas.getContext('2d');
@@ -397,7 +584,14 @@
         const prepFingerCount = document.getElementById('prep-finger-count');
         const prepProgressBar = document.getElementById('prep-progress-bar');
         const prepPercentText = document.getElementById('prep-percent-text');
-        const bypassPrepBtn = document.getElementById('bypass-prep-btn');
+        
+        const modeCampaignBtn = document.getElementById('mode-campaign-btn');
+        const modeTimeAttackBtn = document.getElementById('mode-time-attack-btn');
+        const modeInfiniteBtn = document.getElementById('mode-infinite-btn');
+        const timerBox = document.getElementById('timer-box');
+        const timeLeftDisplay = document.getElementById('time-left-display');
+        const streakFlame = document.getElementById('streak-flame');
+        const streakCount = document.getElementById('streak-count');
 
         function shuffleArray(array) {
             for (let i = array.length - 1; i > 0; i--) {
@@ -407,14 +601,15 @@
             return array;
         }
 
+        // จัดแจงด่านแคมเปญระดับความยาก 10 ข้อแบบสมดุล
         function generateGameCampaign() {
             const tiers = ['easy', 'medium', 'challenging', 'hard', 'master'];
             const chosenLevels = [];
             let currentId = 1;
 
             tiers.forEach(tier => {
-                const shuffledTier = shuffleArray([...QUESTION_POOL[tier]]);
-                const selected = shuffledTier.slice(0, 2);
+                const shuffledTier = shuffleArray([...EXPANDED_QUESTION_POOL[tier]]);
+                const selected = shuffledTier.slice(0, 2); // คัดด่านละ 2 ข้อ
                 
                 selected.forEach(level => {
                     chosenLevels.push({
@@ -456,16 +651,16 @@
             if (currentLevel.setsCount === 2) {
                 const offset = r * 0.55;
                 vennLayout.circles = {
-                    A: { x: cx - offset, y: cy, r: r, label: 'A', color: 'rgba(59, 130, 246, 0.15)', stroke: '#3b82f6' },
-                    B: { x: cx + offset, y: cy, r: r, label: 'B', color: 'rgba(236, 72, 153, 0.15)', stroke: '#ec4899' }
+                    A: { x: cx - offset, y: cy, r: r, label: 'A', stroke: '#3b82f6' },
+                    B: { x: cx + offset, y: cy, r: r, label: 'B', stroke: '#ec4899' }
                 };
             } else {
                 const offset = r * 0.5;
                 const heightOffset = r * 0.43;
                 vennLayout.circles = {
-                    A: { x: cx - offset, y: cy + heightOffset, r: r, label: 'A', color: 'rgba(59, 130, 246, 0.12)', stroke: '#3b82f6' },
-                    B: { x: cx + offset, y: cy + heightOffset, r: r, label: 'B', color: 'rgba(236, 72, 153, 0.12)', stroke: '#ec4899' },
-                    C: { x: cx, y: cy - heightOffset, r: r, label: 'C', color: 'rgba(34, 197, 94, 0.12)', stroke: '#22c55e' }
+                    A: { x: cx - offset, y: cy + heightOffset, r: r, label: 'A', stroke: '#3b82f6' },
+                    B: { x: cx + offset, y: cy + heightOffset, r: r, label: 'B', stroke: '#ec4899' },
+                    C: { x: cx, y: cy - heightOffset, r: r, label: 'C', stroke: '#22c55e' }
                 };
             }
         }
@@ -476,7 +671,15 @@
             speedMultiplier = 2.0;
             
             questBonusTimer = setInterval(() => {
-                bonusTimePercent -= 0.5;
+                if (currentGameMode === 'time_attack') {
+                    // โหมดเวลาจำกัดไม่มีคูณความเร็วจากจับเวลาข้อ แต่สะสมความตื่นเต้น
+                    speedMultiplier = 1.0 + (comboStreak * 0.1); 
+                    bonusTimePercent = 100;
+                    updateBonusUI();
+                    return;
+                }
+                
+                bonusTimePercent -= 0.6;
                 if (bonusTimePercent <= 0) {
                     bonusTimePercent = 0;
                     speedMultiplier = 1.0;
@@ -490,7 +693,15 @@
 
         function updateBonusUI() {
             timeBonusBar.style.width = `${bonusTimePercent}%`;
-            timeBonusPercent.textContent = `x${speedMultiplier.toFixed(1)} Bonus`;
+            
+            if (currentGameMode === 'time_attack') {
+                timeBonusPercent.textContent = `คอมโบสตรีคบวกแต้ม x${speedMultiplier.toFixed(1)}`;
+                speedBonusDisplay.textContent = `x${speedMultiplier.toFixed(1)}`;
+                timeBonusBar.className = "bg-gradient-to-r from-orange-500 via-red-500 to-purple-500 h-full transition-all duration-100 animate-pulse";
+                return;
+            }
+
+            timeBonusPercent.textContent = `โบนัสความเร็วคูณ x${speedMultiplier.toFixed(1)}`;
             speedBonusDisplay.textContent = `x${speedMultiplier.toFixed(1)}`;
 
             if (bonusTimePercent > 50) {
@@ -511,13 +722,14 @@
             const rectW = canvas.width - padding * 2;
             const rectH = Math.max(100, canvas.height - padding * 2 - 60);
 
+            // วาดกรอบสี่เหลี่ยมเอกภพสัมพัทธ์ (U)
             ctx.strokeStyle = '#334155';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2.5;
             ctx.strokeRect(rectX, rectY, rectW, rectH);
 
             ctx.fillStyle = '#64748b';
-            ctx.font = 'bold 20px Prompt';
-            ctx.fillText('U', rectX + rectW - 25, rectY + 30);
+            ctx.font = 'bold 22px Prompt';
+            ctx.fillText('U', rectX + rectW - 30, rectY + 35);
 
             if (isGameStarted) {
                 const parts = VENN_PARTS_INFO[currentLevel.setsCount];
@@ -528,53 +740,69 @@
                 });
             }
 
-            // แสดงเส้นขอบวงกลมและตัวอักษรระบุชื่อเซตในตำแหน่งที่คมชัดที่สุดตามหัวข้อความสอดคล้องของโจทย์และสีสัน
+            // แสดงขอบเส้นวงกลมชื่อเซตสอดคล้องอย่างเด่นชัดเจน
             Object.keys(vennLayout.circles).forEach(key => {
                 const circle = vennLayout.circles[key];
                 ctx.beginPath();
                 ctx.arc(circle.x, circle.y, Math.max(1, circle.r), 0, Math.PI * 2);
                 ctx.strokeStyle = circle.stroke;
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 3.5;
                 ctx.stroke();
 
-                // ปรับแต่งสีและตำแหน่งตัวอักษรให้สอดคล้องกับเส้นขอบวงกลมเซตนั้นๆ ชัดเจน ไม่ทับซ้อนพื้นที่ตรงกลาง
-                ctx.fillStyle = circle.stroke; // สีตัวอักษรเดียวกับสีวงกลม
-                ctx.font = 'bold 26px Prompt';
+                ctx.fillStyle = circle.stroke; 
+                ctx.font = 'bold 28px Prompt';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
-                // ใส่เงาเรืองแสงสีขาวให้มองเห็นชัดเจนยิ่งขึ้นเวลาซ้อนทับภาพกล้องจริง
-                ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
-                ctx.shadowBlur = 6;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+                ctx.shadowBlur = 8;
                 
                 let labelX = circle.x;
                 let labelY = circle.y;
                 
                 const currentSetsCount = currentLevel.setsCount;
                 if (currentSetsCount === 2) {
-                    // จัดตำแหน่ง 2 เซต (จัดเฉียงบนซ้ายขวา)
-                    if (key === 'A') { labelX -= circle.r * 0.8; labelY -= circle.r * 0.8; }
-                    else if (key === 'B') { labelX += circle.r * 0.8; labelY -= circle.r * 0.8; }
+                    if (key === 'A') { labelX -= circle.r * 0.85; labelY -= circle.r * 0.85; }
+                    else if (key === 'B') { labelX += circle.r * 0.85; labelY -= circle.r * 0.85; }
                 } else {
-                    // จัดตำแหน่ง 3 เซต (สอดคล้องอย่างชัดเจน ไม่ให้ทับซ้อนส่วนแกนร่วม)
                     if (key === 'A') { 
-                        labelX -= circle.r * 0.8; 
-                        labelY += circle.r * 0.5; // ดึงลงไปด้านล่างซ้ายนอกจุดตัด AB และ AC
+                        labelX -= circle.r * 0.85; 
+                        labelY += circle.r * 0.55; 
                     } else if (key === 'B') { 
-                        labelX += circle.r * 0.8; 
-                        labelY += circle.r * 0.5; // ดึงลงไปด้านล่างขวานอกจุดตัด AB และ BC
+                        labelX += circle.r * 0.85; 
+                        labelY += circle.r * 0.55; 
                     } else if (key === 'C') { 
-                        labelY -= circle.r * 0.85; // ยกขึ้นเหนือด้านบนสุดของวง C พ้นจุดตัด AC, BC และ ABC
+                        labelY -= circle.r * 0.9; 
                     }
                 }
 
                 ctx.fillText(key, labelX, labelY);
-                
-                // รีเซ็ตการตั้งค่าเงาหลังวาดตัวอักษรเสร็จเพื่อไม่ให้กระทบฟังก์ชันอื่น
                 ctx.shadowColor = 'transparent';
                 ctx.shadowBlur = 0;
             });
         }
+
+        // รันอนิเมชันสำหรับอนุภาค Confetti ให้อัปเดตอย่างสมูทไร้สะดุด
+        function renderLoop() {
+            if (!isCameraActive) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0a0b10';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                drawVennDiagram();
+                updateAndDrawParticles();
+                
+                // ถ้าวาดนิ้วพ้อยเตอร์โหมดสัมผัส
+                if (isGameStarted && pointerPosition.x > 0) {
+                    ctx.beginPath();
+                    ctx.arc(pointerPosition.x, pointerPosition.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(168, 85, 247, 0.6)';
+                    ctx.fill();
+                }
+            }
+            requestAnimationFrame(renderLoop);
+        }
+        requestAnimationFrame(renderLoop);
 
         function fillCircle(circle, targetCtx = offCtx) {
             targetCtx.beginPath();
@@ -734,6 +962,7 @@
 
         function toggleVennPart(partId) {
             if (!partId) return;
+            playSFX('click');
             if (selectedParts.has(partId)) {
                 selectedParts.delete(partId);
             } else {
@@ -744,7 +973,7 @@
 
         function renderControlPanel() {
             if (!isGameStarted) {
-                vennPartsControl.innerHTML = '<div class="text-slate-500 text-xs text-center py-6 w-full col-span-2"><i class="fa-solid fa-lock mr-1"></i> กรุณาเชื่อมกล้องและชู 10 นิ้วเพื่อเริ่มโจทย์และแผงควบคุม</div>';
+                vennPartsControl.innerHTML = '<div class="text-slate-500 text-xs text-center py-6 w-full col-span-2"><i class="fa-solid fa-lock mr-1"></i> กรุณาเลือกโหมดในหน้าจอเตรียมความพร้อม</div>';
                 return;
             }
             vennPartsControl.innerHTML = '';
@@ -754,13 +983,13 @@
             parts.forEach(part => {
                 const isSelected = selectedParts.has(part.id);
                 const btn = document.createElement('button');
-                btn.className = `p-3 rounded-xl border text-sm font-semibold transition-all flex items-center justify-between ${
+                btn.className = `p-2.5 sm:p-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all flex items-center justify-between ${
                     isSelected 
                     ? 'bg-purple-600/30 border-purple-500 text-white shadow-lg shadow-purple-500/10' 
                     : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:border-slate-700'
                 }`;
                 btn.innerHTML = `
-                    <span>${part.label}</span>
+                    <span class="truncate pr-1">${part.label}</span>
                     <i class="fa-solid ${isSelected ? 'fa-square-check text-purple-400' : 'fa-square text-slate-700'}"></i>
                 `;
                 btn.addEventListener('click', () => {
@@ -805,18 +1034,19 @@
                 ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
                 ctx.restore();
             } else {
-                ctx.fillStyle = '#0c0d14';
+                ctx.fillStyle = '#0a0b10';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
 
             drawVennDiagram();
+            updateAndDrawParticles();
 
             currentGestureMode = 'none';
             let totalFingersDetected = 0;
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                arStatus.className = "bg-green-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
-                arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span> <i class="fa-solid fa-video"></i> ตรวจพบระบบ AR`;
+                arStatus.className = "bg-green-500/90 text-white text-[10px] sm:text-xs px-2.5 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-1.5 w-fit z-30";
+                arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span> <i class="fa-solid fa-video"></i> ระบบกล้อง AR ออนไลน์`;
 
                 results.multiHandLandmarks.forEach(landmarks => {
                     drawHandKeypoints(landmarks);
@@ -824,7 +1054,7 @@
                 });
 
                 if (!isGameStarted) {
-                    prepFingerCount.textContent = `ตรวจจับได้: ${totalFingersDetected} / 10 นิ้ว`;
+                    prepFingerCount.textContent = `เชื่อมต่อได้: ${totalFingersDetected} / 10 นิ้ว`;
                     
                     if (totalFingersDetected >= 9) {
                         prepProgress = Math.min(100, prepProgress + 2); 
@@ -836,11 +1066,14 @@
                     prepPercentText.textContent = `${Math.floor(prepProgress)}%`;
 
                     if (prepProgress >= 100) {
-                        startGame();
+                        playSFX('levelUp');
+                        // เริ่มต้นเล่นโหมดมาตรฐาน
+                        setupCampaignMode();
                     }
                     return; 
                 }
 
+                // กระบวนการคำนวน AR pointer
                 const primaryHand = results.multiHandLandmarks[0];
                 const indexFingerTip = primaryHand[8];
                 const middleFingerTip = primaryHand[12];
@@ -865,8 +1098,8 @@
                 if (isIndexUp && isMiddleUp && isRingUp && !isPinkyUp) {
                     currentGestureMode = 'select';
                     gestureStatus.classList.remove('hidden');
-                    gestureStatus.className = "bg-amber-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
-                    gestureStatus.innerHTML = `<i class="fa-solid fa-hand text-yellow-300"></i> โหมด 3 นิ้ว: ระบายสีแรเงา`;
+                    gestureStatus.className = "bg-amber-500/90 text-white text-[10px] sm:text-xs px-2.5 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-1.5 w-fit z-30";
+                    gestureStatus.innerHTML = `<i class="fa-solid fa-hand text-yellow-300"></i> ลากนิ้วระบายสี`;
                     
                     ctx.beginPath();
                     ctx.arc(pointerPosition.x, pointerPosition.y, 25, 0, Math.PI * 2);
@@ -874,18 +1107,13 @@
                     ctx.lineWidth = 4;
                     ctx.stroke();
 
-                    ctx.fillStyle = 'rgba(245, 158, 11, 0.4)';
-                    ctx.beginPath();
-                    ctx.arc(pointerPosition.x, pointerPosition.y, 10, 0, Math.PI * 2);
-                    ctx.fill();
-
                     detectCollisionAndAction(pointerPosition.x, pointerPosition.y, 'select');
                 } 
                 else if (isIndexUp && !isMiddleUp && !isRingUp) {
                     currentGestureMode = 'deselect';
                     gestureStatus.classList.remove('hidden');
-                    gestureStatus.className = "bg-rose-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
-                    gestureStatus.innerHTML = `<i class="fa-solid fa-hand-pointer text-rose-300"></i> โหมด 1 นิ้ว: ยางลบ (ยกเลิกแรเงา)`;
+                    gestureStatus.className = "bg-rose-500/90 text-white text-[10px] sm:text-xs px-2.5 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-1.5 w-fit z-30";
+                    gestureStatus.innerHTML = `<i class="fa-solid fa-hand-pointer text-rose-300"></i> โหมด 1 นิ้ว: ลบออก`;
                     
                     ctx.beginPath();
                     ctx.arc(pointerPosition.x, pointerPosition.y, 25, 0, Math.PI * 2);
@@ -895,17 +1123,12 @@
                     ctx.stroke();
                     ctx.setLineDash([]);
 
-                    ctx.fillStyle = 'rgba(244, 63, 94, 0.4)';
-                    ctx.beginPath();
-                    ctx.arc(pointerPosition.x, pointerPosition.y, 10, 0, Math.PI * 2);
-                    ctx.fill();
-
                     detectCollisionAndAction(pointerPosition.x, pointerPosition.y, 'deselect');
                 } 
                 else if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp) {
                     currentGestureMode = 'submit';
                     gestureStatus.classList.remove('hidden');
-                    gestureStatus.className = "bg-green-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
+                    gestureStatus.className = "bg-green-500/90 text-white text-[10px] sm:text-xs px-2.5 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-1.5 w-fit z-30";
                     gestureStatus.innerHTML = `<i class="fa-solid fa-hand-scissors text-green-300 rotate-90"></i> โหมด 2 นิ้ว: ส่งคำตอบ...`;
                     
                     ctx.beginPath();
@@ -913,11 +1136,6 @@
                     ctx.strokeStyle = '#10b981';
                     ctx.lineWidth = 4;
                     ctx.stroke();
-
-                    ctx.fillStyle = 'rgba(16, 185, 129, 0.4)';
-                    ctx.beginPath();
-                    ctx.arc(pointerPosition.x, pointerPosition.y, 10, 0, Math.PI * 2);
-                    ctx.fill();
 
                     const now = Date.now();
                     if (now - lastSubmitTime > SUBMIT_COOLDOWN_MS) {
@@ -927,25 +1145,14 @@
                 }
                 else {
                     gestureStatus.classList.add('hidden');
-
-                    ctx.beginPath();
-                    ctx.arc(pointerPosition.x, pointerPosition.y, 12, 0, Math.PI * 2);
-                    ctx.strokeStyle = '#3b82f6';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-
-                    ctx.fillStyle = '#3b82f6';
-                    ctx.beginPath();
-                    ctx.arc(pointerPosition.x, pointerPosition.y, 5, 0, Math.PI * 2);
-                    ctx.fill();
                 }
             } else {
                 if (isCameraActive) {
-                    arStatus.className = "bg-amber-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2 w-fit z-30";
-                    arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span> ค้นหามือในกล้อง...`;
+                    arStatus.className = "bg-amber-500/90 text-white text-[10px] sm:text-xs px-2.5 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-1.5 w-fit z-30";
+                    arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span> ค้นหามือกล้อง AR...`;
                 }
                 if (!isGameStarted && prepProgress > 0) {
-                    prepProgress = Math.max(0, prepProgress - 1);
+                    prepProgress = Math.max(0, prepProgress - 1.5);
                     prepProgressBar.style.width = `${prepProgress}%`;
                     prepPercentText.textContent = `${Math.floor(prepProgress)}%`;
                 }
@@ -954,8 +1161,8 @@
 
         function drawHandKeypoints(landmarks) {
             ctx.fillStyle = '#a855f7';
-            ctx.strokeStyle = 'rgba(168, 85, 247, 0.5)';
-            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(168, 85, 247, 0.4)';
+            ctx.lineWidth = 2;
 
             const connections = [
                 [0, 1], [1, 2], [2, 3], [3, 4],
@@ -973,14 +1180,6 @@
                 ctx.lineTo((1 - pt2.x) * canvas.width, pt2.y * canvas.height);
                 ctx.stroke();
             });
-
-            landmarks.forEach(landmark => {
-                const cx = (1 - landmark.x) * canvas.width;
-                const cy = landmark.y * canvas.height;
-                ctx.beginPath();
-                ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-                ctx.fill();
-            });
         }
 
         function detectCollisionAndAction(x, y, action) {
@@ -991,46 +1190,38 @@
                 if (!selectedParts.has(partId)) {
                     selectedParts.add(partId);
                     updateUI();
-                    triggerSparkleEffect(x, y, 'rgba(168, 85, 247, 0.4)');
+                    triggerConfettiBurst(x, y);
                 }
             } else if (action === 'deselect') {
                 if (selectedParts.has(partId)) {
                     selectedParts.delete(partId);
                     updateUI();
-                    triggerSparkleEffect(x, y, 'rgba(244, 63, 94, 0.4)');
                 }
             }
         }
 
-        function triggerSparkleEffect(x, y, fillColor) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(x, y, 40, 0, Math.PI * 2);
-            ctx.fillStyle = fillColor;
-            ctx.fill();
-            ctx.restore();
-        }
-
         canvas.addEventListener('mousedown', (e) => {
             if (!isGameStarted) return;
-            if (isCameraActive && currentGestureMode !== 'none') return;
-
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
             const clickX = (e.clientX - rect.left) * scaleX;
             const clickY = (e.clientY - rect.top) * scaleY;
 
+            pointerPosition.x = clickX;
+            pointerPosition.y = clickY;
+
             const clickedPartId = getVennPartAtPoint(clickX, clickY);
             if (clickedPartId) {
                 toggleVennPart(clickedPartId);
-                triggerSparkleEffect(clickX, clickY, 'rgba(168, 85, 247, 0.25)');
+                triggerConfettiBurst(clickX, clickY);
             }
         });
 
         canvas.addEventListener('touchstart', (e) => {
             if (!isGameStarted) return;
             if (e.touches.length === 0) return;
+            
             const touch = e.touches[0];
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -1038,39 +1229,119 @@
             const touchX = (touch.clientX - rect.left) * scaleX;
             const touchY = (touch.clientY - rect.top) * scaleY;
 
+            pointerPosition.x = touchX;
+            pointerPosition.y = touchY;
+
             const touchedPartId = getVennPartAtPoint(touchX, touchY);
             if (touchedPartId) {
                 toggleVennPart(touchedPartId);
-                triggerSparkleEffect(touchX, touchY, 'rgba(168, 85, 247, 0.25)');
+                triggerConfettiBurst(touchX, touchY);
             }
-            e.preventDefault();
+            e.preventDefault(); 
         }, { passive: false });
 
-        function startGame() {
+        function setupCampaignMode() {
+            currentGameMode = 'campaign';
             isGameStarted = true;
-            prepScreen.classList.add('hidden'); 
-            
-            submitBtn.disabled = false;
-            submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-lg flex items-center justify-center gap-2";
-            submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจคำตอบ (Submit Answer)`;
-
-            skipBtn.disabled = false;
-            skipBtn.className = "flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl transition text-sm flex items-center justify-center gap-1";
-            
-            resetBtn.disabled = false;
-            resetBtn.className = "flex-1 bg-slate-800 hover:bg-red-950/40 hover:text-red-400 text-slate-400 font-semibold py-3 rounded-xl transition text-sm flex items-center justify-center gap-1 border border-transparent hover:border-red-900/50";
-
+            timerBox.classList.add('hidden');
+            streakFlame.classList.add('hidden');
+            generateGameCampaign();
+            initActionButtons();
             loadLevel(0);
         }
 
-        bypassPrepBtn.addEventListener('click', () => {
-            startGame();
+        function setupTimeAttackMode() {
+            currentGameMode = 'time_attack';
+            isGameStarted = true;
+            timeAttackSeconds = 60;
+            comboStreak = 0;
+            maxComboStreak = 0;
+            
+            timerBox.classList.remove('hidden');
+            timeLeftDisplay.textContent = timeAttackSeconds;
+            
+            streakFlame.classList.remove('hidden');
+            streakCount.textContent = comboStreak;
+
+            // รวมโจทย์ทั้งหมดที่มีเพื่อตอบให้ทัน
+            const allTiers = ['easy', 'medium', 'challenging', 'hard', 'master'];
+            const infinitePool = [];
+            allTiers.forEach(tier => {
+                EXPANDED_QUESTION_POOL[tier].forEach(item => {
+                    infinitePool.push({ ...item });
+                });
+            });
+            GAME_LEVELS = shuffleArray(infinitePool);
+
+            initActionButtons();
+            loadLevel(0);
+
+            // เริ่มนับถอยหลัง
+            if (timeAttackTimer) clearInterval(timeAttackTimer);
+            timeAttackTimer = setInterval(() => {
+                timeAttackSeconds--;
+                timeLeftDisplay.textContent = timeAttackSeconds;
+                if (timeAttackSeconds <= 0) {
+                    clearInterval(timeAttackTimer);
+                    playSFX('wrong');
+                    showEndGameModal();
+                }
+            }, 1000);
+        }
+
+        function setupInfiniteMode() {
+            currentGameMode = 'infinite';
+            isGameStarted = true;
+            timerBox.classList.add('hidden');
+            streakFlame.classList.add('hidden');
+
+            const allTiers = ['easy', 'medium', 'challenging', 'hard', 'master'];
+            const infinitePool = [];
+            allTiers.forEach(tier => {
+                EXPANDED_QUESTION_POOL[tier].forEach(item => {
+                    infinitePool.push({ ...item });
+                });
+            });
+            GAME_LEVELS = shuffleArray(infinitePool);
+
+            initActionButtons();
+            loadLevel(0);
+        }
+
+        function initActionButtons() {
+            prepScreen.classList.add('hidden'); 
+            
+            submitBtn.disabled = false;
+            submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-base sm:text-lg flex items-center justify-center gap-2";
+            submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจคำตอบ (Submit Answer)`;
+
+            skipBtn.disabled = false;
+            skipBtn.className = "flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl transition text-xs sm:text-sm flex items-center justify-center gap-1";
+        }
+
+        // จัดการคลิกปุ่มโหมดต่าง ๆ ในหน้าต่างแรก
+        modeCampaignBtn.addEventListener('click', () => {
+            playSFX('levelUp');
+            setupCampaignMode();
+        });
+        modeTimeAttackBtn.addEventListener('click', () => {
+            playSFX('levelUp');
+            setupTimeAttackMode();
+        });
+        modeInfiniteBtn.addEventListener('click', () => {
+            playSFX('levelUp');
+            setupInfiniteMode();
         });
 
         function loadLevel(index) {
-            if (index >= GAME_LEVELS.length) {
+            if (currentGameMode === 'campaign' && index >= GAME_LEVELS.length) {
                 showEndGameModal();
                 return;
+            }
+            // ป้องกันด่านตกขอบในโหมดอื่น ๆ
+            if (index >= GAME_LEVELS.length) {
+                index = 0;
+                GAME_LEVELS = shuffleArray(GAME_LEVELS);
             }
 
             currentLevelIndex = index;
@@ -1078,7 +1349,14 @@
 
             const level = GAME_LEVELS[currentLevelIndex];
 
-            levelDisplay.textContent = `${level.id}/${GAME_LEVELS.length}`;
+            if (currentGameMode === 'campaign') {
+                levelDisplay.textContent = `${level.id}/${GAME_LEVELS.length}`;
+            } else if (currentGameMode === 'time_attack') {
+                levelDisplay.textContent = `ตอบถูก: ${correctAnswersCount}`;
+            } else {
+                levelDisplay.textContent = `∞ (ฝึกฝน)`;
+            }
+
             questText.textContent = level.questText;
             levelDifficulty.textContent = level.difficulty;
             levelDifficulty.className = level.difficultyClass;
@@ -1092,7 +1370,7 @@
 
             if (!isCameraActive) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#0c0d14';
+                ctx.fillStyle = '#0a0b10';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 drawVennDiagram();
             }
@@ -1104,7 +1382,7 @@
 
             if (!isCameraActive) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#0c0d14';
+                ctx.fillStyle = '#0a0b10';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 drawVennDiagram();
             }
@@ -1119,86 +1397,139 @@
                 [...selectedParts].every(part => correctSet.has(part));
 
             if (isCorrect) {
+                playSFX('correct');
                 const basePoints = level.setsCount === 2 ? 100 : 150;
                 const earnedPoints = Math.round(basePoints * speedMultiplier);
                 score += earnedPoints;
                 correctAnswersCount++;
 
+                // ตรวจคำนวณสะสมคอมโบและเวลาโบนัสจับเวลา
+                if (currentGameMode === 'time_attack') {
+                    comboStreak++;
+                    if (comboStreak > maxComboStreak) {
+                        maxComboStreak = comboStreak;
+                    }
+                    streakCount.textContent = comboStreak;
+                    if (comboStreak >= 3) {
+                        streakFlame.classList.remove('hidden');
+                        playSFX('combo');
+                    }
+                    timeAttackSeconds += 8; // บวกเวลาเพิ่ม 8 วินาที
+                    timeLeftDisplay.textContent = timeAttackSeconds;
+                }
+
+                // เอฟเฟกต์อนุภาคพลุกระดาษกลางแคนวาสเวนน์
+                triggerConfettiBurst(vennLayout.centerX, vennLayout.centerY);
+
                 canvas.classList.add('animate-correct');
-                submitBtn.className = "w-full bg-green-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-green-500/20 text-lg flex items-center justify-center gap-2";
-                submitBtn.innerHTML = `<i class="fa-solid fa-square-poll-vertical animate-bounce"></i> ถูกต้อง! ได้รับ +${earnedPoints} แต้ม`;
+                submitBtn.className = "w-full bg-green-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-green-500/20 text-base sm:text-lg flex items-center justify-center gap-2";
+                submitBtn.innerHTML = `<i class="fa-solid fa-face-smile animate-bounce"></i> ถูกต้อง! ได้รับ +${earnedPoints} แต้ม`;
 
                 setTimeout(() => {
                     canvas.classList.remove('animate-correct');
-                    submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-lg flex items-center justify-center gap-2";
+                    submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-base sm:text-lg flex items-center justify-center gap-2";
                     submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจคำตอบ (Submit Answer)`;
                     
                     loadLevel(currentLevelIndex + 1);
-                }, 1200);
+                }, 1000);
 
             } else {
+                playSFX('wrong');
                 score = Math.max(0, score - 15);
+                
+                if (currentGameMode === 'time_attack') {
+                    comboStreak = 0;
+                    streakCount.textContent = comboStreak;
+                    streakFlame.classList.add('hidden');
+                    timeAttackSeconds = Math.max(0, timeAttackSeconds - 5); // หักเวลา 5 วินาที
+                    timeLeftDisplay.textContent = timeAttackSeconds;
+                }
+
                 updateUI();
 
-                submitBtn.className = "w-full bg-red-600 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-red-500/20 text-lg flex items-center justify-center gap-2";
-                submitBtn.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> ยังไม่ถูก! ลองเช็คพื้นที่อีกครั้ง (-15 แต้ม)`;
+                submitBtn.className = "w-full bg-red-600 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-red-500/20 text-base sm:text-lg flex items-center justify-center gap-2";
+                submitBtn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> พื้นที่ยังไม่สมบูรณ์! ลองทวนสัจพจน์ใหม่ (-15 แต้ม)`;
 
                 setTimeout(() => {
-                    submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-lg flex items-center justify-center gap-2";
+                    submitBtn.className = "w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-purple-500/20 text-base sm:text-lg flex items-center justify-center gap-2";
                     submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจคำตอบ (Submit Answer)`;
-                }, 1500);
+                }, 1300);
             }
         }
 
         function skipLevel() {
             if (!isGameStarted) return;
+            playSFX('click');
             score = Math.max(0, score - 20);
+            
+            if (currentGameMode === 'time_attack') {
+                comboStreak = 0;
+                streakCount.textContent = comboStreak;
+                streakFlame.classList.add('hidden');
+            }
+            
             loadLevel(currentLevelIndex + 1);
         }
 
         function resetGame() {
+            if (timeAttackTimer) clearInterval(timeAttackTimer);
+            if (questBonusTimer) clearInterval(questBonusTimer);
+            
             score = 0;
             correctAnswersCount = 0;
             isGameStarted = false;
             prepProgress = 0;
+            comboStreak = 0;
+            maxComboStreak = 0;
+
+            timerBox.classList.add('hidden');
+            streakFlame.classList.add('hidden');
             
             prepScreen.classList.remove('hidden'); 
-            prepFingerCount.textContent = `ตรวจจับได้: 0 / 10 นิ้ว`;
+            prepFingerCount.textContent = `เชื่อมต่อได้: 0 / 10 นิ้ว`;
             prepProgressBar.style.width = `0%`;
             prepPercentText.textContent = `0%`;
 
-            prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเพื่อเริ่มจับพิกัด AR`;
-            prepStartCameraBtn.className = "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-purple-500/20 transition duration-300 flex items-center gap-2 mb-6 text-sm pointer-events-auto";
-
             submitBtn.disabled = true;
-            submitBtn.className = "w-full bg-slate-800 text-slate-500 font-bold py-4 rounded-xl cursor-not-allowed text-lg flex items-center justify-center gap-2";
+            submitBtn.className = "w-full bg-slate-800 text-slate-500 font-bold py-3.5 rounded-xl cursor-not-allowed text-base sm:text-lg flex items-center justify-center gap-2";
             submitBtn.innerHTML = `<i class="fa-solid fa-lock"></i> ยังไม่เริ่มเกม`;
 
             skipBtn.disabled = true;
-            skipBtn.className = "flex-1 bg-slate-800/50 text-slate-600 font-semibold py-3 rounded-xl cursor-not-allowed text-sm flex items-center justify-center gap-1";
+            skipBtn.className = "flex-1 bg-slate-800/50 text-slate-600 font-semibold py-2.5 rounded-xl cursor-not-allowed text-xs sm:text-sm flex items-center justify-center gap-1";
             
-            resetBtn.disabled = true;
-            resetBtn.className = "flex-1 bg-slate-800/50 text-slate-600 font-semibold py-3 rounded-xl cursor-not-allowed text-sm flex items-center justify-center gap-1";
+            questText.textContent = "เลือกโหมดในหน้าจอเตรียมความพร้อม";
+            levelDifficulty.textContent = "แนะแนวความพร้อม";
+            levelDifficulty.className = "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-[10px] sm:text-xs px-2.5 py-1.5 rounded-md font-semibold";
+            levelDisplay.textContent = "0/10";
+            scoreDisplay.textContent = "0";
 
-            generateGameCampaign();
-            loadLevel(0);
+            renderControlPanel();
+            if (!isCameraActive) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0a0b10';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                drawVennDiagram();
+            }
         }
 
         function showEndGameModal() {
             if (questBonusTimer) clearInterval(questBonusTimer);
+            if (timeAttackTimer) clearInterval(timeAttackTimer);
             
+            playSFX('win');
             resultModal.classList.remove('hidden');
             document.getElementById('modal-final-score').textContent = score;
-            document.getElementById('modal-correct-count').textContent = `${correctAnswersCount} / 10 ข้อ`;
+            document.getElementById('modal-correct-count').textContent = `${correctAnswersCount} ข้อ`;
+            document.getElementById('modal-max-combo').textContent = maxComboStreak || comboStreak;
 
-            if (score > 1000) {
-                document.getElementById('modal-title').textContent = 'สุดยอดอัจฉริยะเซต!';
-                document.getElementById('modal-desc').textContent = 'คุณแรเงาแผนภาพเวนน์ได้อย่างสมบูรณ์แบบด้วยความเร็วเหนือแสง!';
-                document.getElementById('modal-icon-container').className = "mx-auto w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4 bg-yellow-500/15 text-yellow-400";
+            if (score > 1200 || correctAnswersCount > 10) {
+                document.getElementById('modal-title').textContent = 'ปรมาจารย์แห่งเซตระดับพระกาฬ!';
+                document.getElementById('modal-desc').textContent = 'คุณคือยอดอัจฉริยะเวนน์ผู้กวาดสถิติตำนานคณิตศาสตร์ด้วยความรวดเร็วมหาศาล!';
+                document.getElementById('modal-icon-container').className = "mx-auto w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-4 bg-yellow-500/15 text-yellow-400";
             } else {
-                document.getElementById('modal-title').textContent = 'จบภารกิจแรเงาเซต!';
-                document.getElementById('modal-desc').textContent = 'ฝึกฝนบ่อยๆ จะช่วยพัฒนาทักษะคณิตศาสตร์ของคุณให้รวดเร็วยิ่งขึ้น';
-                document.getElementById('modal-icon-container').className = "mx-auto w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4 bg-blue-500/15 text-blue-400";
+                document.getElementById('modal-title').textContent = 'เสร็จสิ้นรอบท้าทาย!';
+                document.getElementById('modal-desc').textContent = 'เยี่ยมยอด! ทบทวนหลักการเวนน์อีกนิด แล้วท้าทายด่านนี้ใหม่อีกรอบเพื่อความรวดเร็ว';
+                document.getElementById('modal-icon-container').className = "mx-auto w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-4 bg-blue-500/15 text-blue-400";
             }
         }
 
@@ -1218,13 +1549,12 @@
         toggleCameraBtn.addEventListener('click', async () => {
             if (!isCameraActive) {
                 try {
-                    toggleCameraBtn.textContent = 'กำลังโหลดโมเดล AR...';
+                    toggleCameraBtn.textContent = 'กำลังโหลดกล้อง...';
                     toggleCameraBtn.disabled = true;
 
-                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> กำลังเชื่อมต่อระบบกล้อง AR...`;
-                    prepStartCameraBtn.className = "bg-slate-800 text-slate-500 font-bold px-6 py-3.5 rounded-xl transition duration-300 flex items-center gap-2 mb-6 text-sm pointer-events-none";
+                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> กำลังเชื่อมกล้องหน้า AR...`;
+                    prepStartCameraBtn.className = "bg-slate-800 text-slate-500 font-bold px-6 py-3 rounded-xl transition flex items-center gap-2 mb-6 text-sm pointer-events-none";
 
-                    // รับประกันความพร้อมก่อนเรียกใช้งาน setOptions
                     if (!handsDetector) {
                         initMediaPipe();
                     }
@@ -1236,8 +1566,13 @@
                         minTrackingConfidence: 0.6
                     });
 
+                    // รองรับเบราว์เซอร์ iOS Safari 
                     const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { width: 640, height: 480 } 
+                        video: { 
+                            width: { ideal: 640 }, 
+                            height: { ideal: 480 },
+                            facingMode: "user" 
+                        } 
                     });
                     webcamElement.srcObject = stream;
 
@@ -1255,19 +1590,19 @@
                     isCameraActive = true;
                     toggleCameraBtn.disabled = false;
                     toggleCameraBtn.innerHTML = `<i class="fa-solid fa-video"></i> ปิดกล้อง AR`;
-                    toggleCameraBtn.className = "absolute top-4 right-4 z-30 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition duration-300 shadow-lg flex items-center gap-2 border border-red-500";
+                    toggleCameraBtn.className = "absolute top-3 right-3 z-30 bg-red-600 hover:bg-red-700 text-white font-semibold text-[10px] sm:text-xs px-3 py-1.5 rounded-xl transition duration-300 shadow-lg flex items-center gap-1.5 border border-red-500";
 
-                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> กล้องพร้อมใช้งาน! กรุณาชู 10 นิ้ว`;
-                    prepStartCameraBtn.className = "bg-green-600/30 border border-green-500/50 text-green-300 font-bold px-6 py-3.5 rounded-xl flex items-center gap-2 mb-6 text-sm pointer-events-none";
+                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> เปิดกล้องสำเร็จ! ชู 10 นิ้วเพื่อเริ่มโหมดแคมเปญ`;
+                    prepStartCameraBtn.className = "bg-green-600/30 border border-green-500/50 text-green-300 font-bold px-6 py-3 rounded-xl flex items-center gap-2 mb-6 text-sm pointer-events-none";
 
                 } catch (err) {
-                    console.error("สิทธิ์กล้องถูกปฏิเสธ หรือพบข้อผิดพลาด:", err);
+                    console.error("สตรีมสิทธิ์กล้องหน้าบกพร่อง:", err);
                     toggleCameraBtn.disabled = false;
-                    toggleCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเล่นแบบ AR`;
-                    toggleCameraBtn.className = "absolute top-4 right-4 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-xs px-4 py-2 rounded-xl transition duration-300 shadow-lg flex items-center gap-2 border border-slate-700";
+                    toggleCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเล่น AR`;
+                    toggleCameraBtn.className = "absolute top-3 right-3 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-[10px] sm:text-xs px-3 py-1.5 rounded-xl transition duration-300 shadow-lg flex items-center gap-1.5 border border-slate-700";
 
-                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> การเชื่อมต่อล้มเหลว (ลองเปิดสิทธิ์กล้อง)`;
-                    prepStartCameraBtn.className = "bg-red-950/80 border border-red-900/50 text-red-400 font-bold px-6 py-3.5 rounded-xl flex items-center gap-2 mb-6 text-sm pointer-events-auto";
+                    prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> สตรีมกล้องขัดข้อง (กรุณาใช้สัมผัสหน้าจอแทน)`;
+                    prepStartCameraBtn.className = "bg-red-950/80 border border-red-900/50 text-red-400 font-bold px-6 py-3 rounded-xl flex items-center gap-2 mb-6 text-sm pointer-events-auto";
                 }
             } else {
                 isCameraActive = false;
@@ -1280,18 +1615,18 @@
                 }
                 webcamElement.srcObject = null;
 
-                toggleCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเล่นแบบ AR`;
-                toggleCameraBtn.className = "absolute top-4 right-4 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-xs px-4 py-2 rounded-xl transition duration-300 shadow-lg flex items-center gap-2 border border-slate-700";
+                toggleCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเล่น AR`;
+                toggleCameraBtn.className = "absolute top-3 right-3 z-30 bg-slate-800 hover:bg-purple-600 text-white font-semibold text-[10px] sm:text-xs px-3 py-1.5 rounded-xl transition duration-300 shadow-lg flex items-center gap-1.5 border border-slate-700";
 
-                prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> เปิดกล้องเพื่อเริ่มจับพิกัด AR`;
-                prepStartCameraBtn.className = "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-purple-500/20 transition duration-300 flex items-center gap-2 mb-6 text-sm pointer-events-auto";
+                prepStartCameraBtn.innerHTML = `<i class="fa-solid fa-camera"></i> ยืนยันเชื่อมกล้องเล่น AR`;
+                prepStartCameraBtn.className = "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-purple-500/10 transition flex items-center gap-2 mb-6 text-sm pointer-events-auto";
 
-                arStatus.className = "bg-red-500/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-2";
-                arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white"></span> <i class="fa-solid fa-video-slash"></i> ไม่พบกล้อง/AR ปิดอยู่ (ใช้เมาส์ลากแทนได้)`;
+                arStatus.className = "bg-red-500/95 text-white text-[10px] sm:text-xs px-2.5 py-1.5 rounded-full font-semibold shadow-lg flex items-center gap-1.5";
+                arStatus.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-white"></span> <i class="fa-solid fa-video-slash"></i> ใช้สัมผัสหน้าจอแรเงา (คลิกเลือกได้เลย)`;
                 gestureStatus.classList.add('hidden');
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#0c0d14';
+                ctx.fillStyle = '#0a0b10';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 drawVennDiagram();
             }
